@@ -15,7 +15,7 @@ CAMPAIGNS = ["BGC-v1", "Cryosphere-v1", "DECK-v1", "HighResMIP-v1"]
 SCIENCE_DRIVERS = ["Biogeochemical Cycle", "Cryosphere", "Water Cycle"]
 
 """
-dataset_id_template_ = %(source)s.%(model_version)s.%(experiment)s.%(grid_resolution)s.%(realm)s.%(regridding)s.%(data_type)s.%(time_frequency)s.%(ensemble_member)s
+file_id_template_ = %(source)s.%(model_version)s.%(experiment)s.%(grid_resolution)s.%(realm)s.%(regridding)s.%(data_type)s.%(time_frequency)s.%(ensemble_member)s
 directory_format_template_ = %(root)s/%(source)s/%(model_version)s/%(experiment)s/%(grid_resolution)s/%(realm)s/%(regridding)s/%(data_type)s/%(time_frequency)s/%
 """
 
@@ -66,35 +66,33 @@ def filter_lines(path: str):
                 yield line
 
 
-def parse_dataset_id(dataset_id: str):
-    """Parse dataset id for metadata.
+def parse_file_id(file_id: str):
+    """Parse file id for metadata.
 
     Example: 'E3SM.1_0.historical.1deg_atm_60-30km_ocean.sea-ice.180x360.model-output.mon.ens1.v1'
 
-    :param dataset_id:
+    :param file_id:
     :return:
     """
 
-    facets = dataset_id.split(".")
-    realm = extract_facet(dataset_id, facets, "realm", REALMS)
-    data_type = extract_facet(dataset_id, facets, "data_type", DATA_TYPES)
-    science_driver = extract_facet(
-        dataset_id, facets, "science_driver", SCIENCE_DRIVERS
-    )
-    campaign = extract_facet(dataset_id, facets, "campaign", CAMPAIGNS)
+    facets = file_id.split(".")
+    realm = extract_facet(file_id, facets, "realm", REALMS)
+    data_type = extract_facet(file_id, facets, "data_type", DATA_TYPES)
+    science_driver = extract_facet(file_id, facets, "science_driver", SCIENCE_DRIVERS)
+    campaign = extract_facet(file_id, facets, "campaign", CAMPAIGNS)
 
     return realm, data_type, science_driver, campaign
 
 
 def extract_facet(
-    dataset_id: str, dataset_facets: List[str], facet_name: str, options: List[str]
+    file_id: str, file_facets: List[str], facet_name: str, options: List[str]
 ) -> Optional[str]:
     facet = None
     for option in options:
-        if option in dataset_facets:
+        if option in file_facets:
             facet = option
         # else:
-        #     print(f"{facet_name} does not exist for dataset_id, {dataset_id}")
+        #     print(f"{facet_name} does not exist for file_id, {file_id}")
 
     return facet
 
@@ -143,13 +141,13 @@ def parse_log_line(log_line: str):
         idx = None
         print("ERROR: " + log_row["full_path"])
 
-    log_row["dataset_id"] = ".".join(log_row["full_path"][idx:].split("/")[:-1])
+    log_row["file_id"] = ".".join(log_row["full_path"][idx:].split("/")[:-1])
     (
         log_row["realm"],
         log_row["data_type"],
         log_row["campaign"],
         log_row["science_driver"],
-    ) = parse_dataset_id(log_row["dataset_id"])
+    ) = parse_file_id(log_row["file_id"])
 
     return log_row
 
@@ -192,7 +190,7 @@ def main():
         "requester_id",
         "request_method",
         "full_path",
-        "dataset_id",
+        "file_id",
         "realm",
         "data_type",
         "science_driver",
