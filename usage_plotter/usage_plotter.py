@@ -2,7 +2,7 @@ import argparse
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np  # noqa
@@ -11,6 +11,13 @@ from tqdm import tqdm
 
 REALMS = ["ocean", "atmos", "land", "sea-ice"]
 DATA_TYPES = ["time-series", "climo", "model-output", "mapping", "restart"]
+CAMPAIGNS = ["BGC-v1", "Cryosphere-v1", "DECK-v1", "HighResMIP-v1"]
+SCIENCE_DRIVERS = ["Biogeochemical Cycle", "Cryosphere", "Water Cycle"]
+
+"""
+dataset_id_template_ = %(source)s.%(model_version)s.%(experiment)s.%(grid_resolution)s.%(realm)s.%(regridding)s.%(data_type)s.%(time_frequency)s.%(ensemble_member)s
+directory_format_template_ = %(root)s/%(source)s/%(model_version)s/%(experiment)s/%(grid_resolution)s/%(realm)s/%(regridding)s/%(data_type)s/%(time_frequency)s/%
+"""
 
 
 def parse_args():
@@ -22,7 +29,8 @@ def parse_args():
 
 
 def get_logs(path: str):
-    """Fetch the logs from the specified path
+    """Fetch the logs from the specified path.
+
     :param path:
     :return:
     """
@@ -38,7 +46,8 @@ def get_logs(path: str):
 def filter_lines(path: str):
     """Filter lines for parameters specific to a project.
 
-    Currently, it only supports E3SM.
+    Currently, it only supports E3SM
+    # TODO: Support E3SM project in CMIP6
     :param path:
     :return:
     """
@@ -58,27 +67,36 @@ def filter_lines(path: str):
 
 
 def parse_dataset_id(dataset_id: str):
-    """
-    e.g., 'E3SM.1_0.historical.1deg_atm_60-30km_ocean.sea-ice.180x360.model-output.mon.ens1.v1'
+    """Parse dataset id for metadata.
+
+    Example: 'E3SM.1_0.historical.1deg_atm_60-30km_ocean.sea-ice.180x360.model-output.mon.ens1.v1'
+
     :param dataset_id:
     :return:
     """
 
     facets = dataset_id.split(".")
-    realm = None
-    data_type = None
+    realm = extract_facet(dataset_id, facets, "realm", REALMS)
+    data_type = extract_facet(dataset_id, facets, "data_type", DATA_TYPES)
+    science_driver = extract_facet(
+        dataset_id, facets, "science_driver", SCIENCE_DRIVERS
+    )
+    campaign = extract_facet(dataset_id, facets, "campaign", CAMPAIGNS)
 
-    try:
-        realm = facets[4]
-    except IndexError:
-        print(f"Realm does not exist for dataset_id, {dataset_id}")
+    return realm, data_type, science_driver, campaign
 
-    try:
-        data_type = facets[6]
-    except IndexError:
-        print(f"Realm does not exist for dataset_id, {data_type}")
 
-    return realm, data_type
+def extract_facet(
+    dataset_id: str, dataset_facets: List[str], facet_name: str, options: List[str]
+) -> Optional[str]:
+    facet = None
+    for option in options:
+        if option in dataset_facets:
+            facet = option
+        # else:
+        #     print(f"{facet_name} does not exist for dataset_id, {dataset_id}")
+
+    return facet
 
 
 def parse_timestamp(timestamp: str, log_row: Dict[str, Any]) -> Dict[str, Any]:
@@ -88,7 +106,6 @@ def parse_timestamp(timestamp: str, log_row: Dict[str, Any]) -> Dict[str, Any]:
     :param log_row:
     :return:
     """
-
     timestamp_str = timestamp[timestamp.find("[") + 1 : timestamp.find(":")]
     log_row["date"] = datetime.strptime(timestamp_str, "%d/%b/%Y").date()
     log_row["year"] = log_row["date"].year
@@ -120,16 +137,19 @@ def parse_log_line(log_line: str):
     log_row["request_method"] = attrs[5]
     log_row["full_path"] = attrs[6]
 
-    full_path = log_row["full_path"]
-
     try:
-        idx = full_path.index("user_pub_work") + len("user_pub_work") + 1
+        idx = log_row["full_path"].index("user_pub_work") + len("user_pub_work") + 1
     except ValueError:
         idx = None
-        print(f"Error, no index for path: {full_path}")
+        print("ERROR: " + log_row["full_path"])
 
-    log_row["dataset_id"] = ".".join(full_path)[idx:].split("/")[:-1]
-    log_row["realm"], log_row["data_type"] = parse_dataset_id(log_row["dataset_id"])
+    log_row["dataset_id"] = ".".join(log_row["full_path"][idx:].split("/")[:-1])
+    (
+        log_row["realm"],
+        log_row["data_type"],
+        log_row["campaign"],
+        log_row["science_driver"],
+    ) = parse_dataset_id(log_row["dataset_id"])
 
     return log_row
 
@@ -156,10 +176,14 @@ def plot_requests_by_month(df: pd.DataFrame, project: str) -> pd.DataFrame:
 
 
 def main():
-    # TODO: Include command line args: root_dir, project
-    # parsed_args = parse_args()
-    # root_dir = parsed_args.root if parsed_args.root else 'access_logs'
     root_dir = "access_logs"
+
+    requests = []
+    for log in tqdm(get_logs(root_dir)):
+        for line in filter_lines(log):
+            row = parse_log_line(line)
+            requests.append(row)
+
     columns = [
         "date",
         "year",
@@ -171,13 +195,9 @@ def main():
         "dataset_id",
         "realm",
         "data_type",
+        "science_driver",
+        "campaign",
     ]
-
-    requests = []
-    for log in tqdm(get_logs(root_dir)):
-        for line in filter_lines(log):
-            row = parse_log_line(line)
-            requests.append(row)
 
     df_requests = pd.DataFrame(requests, columns=columns)
 
