@@ -2,16 +2,12 @@ import argparse
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import List, Literal, Optional, TypedDict, Union
 
 import matplotlib.pyplot as plt
-import numpy as np  # noqa
 import pandas as pd
+from pandas.core import generic  # noqa
 from tqdm import tqdm
-
-# E3SM templates for parsing
-# file_id_template_ = %(source)s.%(model_version)s.%(experiment)s.%(grid_resolution)s.%(realm)s.%(regridding)s.%(data_type)s.%(time_frequency)s.%(ensemble_member)s
-# directory_format_template_ = %(root)s/%(source)s/%(model_version)s/%(experiment)s/%(grid_resolution)s/%(realm)s/%(regridding)s/%(data_type)s/%(time_frequency)s/%
 
 # E3SM Facets that are available in file/dataset id and directory format
 REALMS = ["ocean", "atmos", "land", "sea-ice"]
@@ -34,17 +30,52 @@ TIME_FREQUENCY = [
 CAMPAIGNS = ["BGC-v1", "Cryosphere-v1", "DECK-v1", "HighResMIP-v1"]
 SCIENCE_DRIVERS = ["Biogeochemical Cycle", "Cryosphere", "Water Cycle"]
 
+# Type annotations
+Project = Literal["E3SM", "E3SM in CMIP6"]
+LogRow = TypedDict(
+    "LogRow",
+    {
+        "log_line": str,
+        "date": pd.Timestamp,
+        "year": Optional[str],
+        "month": Optional[str],
+        "requester_ip": str,
+        "path": str,
+        "dataset_id": Optional[str],
+        "file_id": Optional[str],
+        "access_type": str,
+        "status_code": str,
+        "bytes": str,
+        "mb": float,
+        "project": Project,
+        "realm": Optional[str],
+        "data_type": Optional[str],
+        "science_driver": Optional[str],
+        "campaign": Optional[str],
+    },
+)
+
 
 def bytes_to(
-    bytes_str: Union[str, int],
+    bytes: Union[str, int],
     to: Literal["kb", "mb", "gb", "tb"],
-    bsize: int = 1024,
-):
-    """Convert bytes to another unit."""
+    bsize: Literal[1024, 1000] = 1024,
+) -> float:
+    """Convert bytes to another unit.
+
+    :param bytes: Bytes value
+    :type bytes: Union[str, int]
+    :param to: Unit to convert to
+    :type to: Literal["kb", "mb", "gb", "tb"]
+    :param bsize: Bytes size, defaults to 1024
+    :type bsize: int, optional
+    :return: Converted data units
+    :rtype: float
+    """
     map_sizes = {"kb": 1, "mb": 2, "gb": 3, "t": 4}
 
-    bytes = float(bytes_str)
-    return bytes / (bsize ** map_sizes[to])
+    bytes_float = float(bytes)
+    return bytes_float / (bsize ** map_sizes[to])
 
 
 def parse_args():
@@ -75,6 +106,8 @@ def get_logs(path: str):
 def filter_lines(path: str):
     """Filter log lines using a generator.
 
+    Refer to README.md for the typical directory and dataset id structures.
+
     :param path: [description]
     :type path: str
     :yield: [description]
@@ -84,7 +117,6 @@ def filter_lines(path: str):
         while (line := instream.readline()) :
             if (
                 "E3SM" in line
-                and "CMIP6" not in line
                 and "xml" not in line
                 and "ico" not in line
                 and "cmip6_variables" not in line
@@ -95,65 +127,45 @@ def filter_lines(path: str):
                 yield line
 
 
-def parse_log_line(log_line: str):
+def parse_log_line(line: str):
     """Parse log line to extract HTTP request info.
-
-    Example log:
-
-        '128.211.148.13 - - [22/Sep/2019:12:01:01 -0700] "GET /thredds/fileServer/user_pub_work/E3SM/1_0/historical/1deg_atm_60-30km_ocean/land/native/model-output/mon/ens1/v1/20180215.DECKv1b_H1.ne30_oEC.edison.clm2.h0.1850-01.nc HTTP/1.1" 200 91564624 "-" "Wget/1.14 (linux-gnu)"\n'
-
-    Example log split:
-        ['128.211.148.13',
-        '-',
-        '-',
-        '[22/Sep/2019:12:01:01',
-        '-0700]',
-        '"GET',
-        '/thredds/fileServer/user_pub_work/E3SM/1_0/historical/1deg_atm_60-30km_ocean/land/native/model-output/mon/ens1/v1/20180215.DECKv1b_H1.ne30_oEC.edison.clm2.h0.1850-01.nc',
-        'HTTP/1.1"',
-        '200',
-        '91564624',
-        '"-"',
-        '"Wget/1.14',
-        '(linux-gnu)"']
-
-    How to read Apache log line:
-
-        * https://www.keycdn.com/support/apache-access-log#reading-the-apache-access-logs
-
     :param log_line: [description]
     :type log_line: Dict[str, Any]
     :return: [description]
     :rtype: Dict[str, Any]
     """
-    attrs = log_line.split()
+    attrs = line.split()
 
     # None values are filled using helper functions.
-    parsed_log_line: Dict[str, Any] = {
-        "log": log_line,
+    timestamp = attrs[3]
+    path = attrs[6].replace("%2F", "/")
+
+    parsed_line: LogRow = {
+        "log_line": line,
         "date": None,
         "year": None,
         "month": None,
         "requester_ip": attrs[0],
-        "full_path": attrs[6],
+        "path": path,
         "dataset_id": None,
         "file_id": None,
         "access_type": attrs[11],
         "status_code": attrs[8],
         "bytes": attrs[9],
         "mb": bytes_to(attrs[9], "mb") if "-" not in attrs[9] else 0,
+        "project": "E3SM" if "/E3SM-Project" not in path else "E3SM in CMIP6",
         "realm": None,
         "data_type": None,
         "science_driver": None,
         "campaign": None,
     }
 
-    parsed_log_line = parse_timestamp(attrs[3], parsed_log_line)
-    parsed_log_line = parse_path_for_ids(parsed_log_line)
-    return parsed_log_line
+    parsed_line = parse_timestamp(timestamp, parsed_line)
+    parsed_line = parse_path_for_ids(parsed_line)
+    return parsed_line
 
 
-def parse_timestamp(timestamp: str, log_row: Dict[str, Any]) -> Dict[str, Any]:
+def parse_timestamp(timestamp: str, log_line: LogRow) -> LogRow:
     """Parse a string timestamp for specific datetime values.
 
     :param timestamp: [description]
@@ -165,10 +177,10 @@ def parse_timestamp(timestamp: str, log_row: Dict[str, Any]) -> Dict[str, Any]:
     """
     timestamp_str = timestamp[timestamp.find("[") + 1 : timestamp.find(":")]
 
-    log_row["date"] = datetime.strptime(timestamp_str, "%d/%b/%Y").date()
-    log_row["year"] = log_row["date"].year
-    log_row["month"] = log_row["date"].month
-    return log_row
+    log_line["date"] = datetime.strptime(timestamp_str, "%d/%b/%Y").date()
+    log_line["year"] = log_line["date"].year
+    log_line["month"] = log_line["date"].month
+    return log_line
 
 
 def parse_path_for_ids(log_row):
@@ -180,13 +192,13 @@ def parse_path_for_ids(log_row):
     :rtype: [type]
     """
     try:
-        idx = log_row["full_path"].index("user_pub_work") + len("user_pub_work") + 1
+        idx = log_row["path"].index("user_pub_work") + len("user_pub_work") + 1
     except ValueError:
+        # This usually means an HTTP 302/404 request (incorrect path)
         idx = None
-        print("ERROR: " + log_row["full_path"])
 
-    log_row["dataset_id"] = ".".join(log_row["full_path"][idx:].split("/")[:-1])
-    log_row["file_id"] = log_row["full_path"].split("/")[-1]
+    log_row["dataset_id"] = ".".join(log_row["path"][idx:].split("/")[:-1])
+    log_row["file_id"] = log_row["path"].split("/")[-1]
 
     facets = log_row["dataset_id"].split(".")
     log_row.update(
@@ -235,12 +247,9 @@ def group_by_quarter(df: pd.DataFrame) -> pd.DataFrame:
     # TODO: Confirm resampling quarter start month, it is based on IG FY
     """
     # Set index to month_year in order to resample on quarters
-    df_gb_mon_yr = df.copy()
-    df_gb_mon_yr = df_gb_mon_yr.set_index("month_year")
+    df.set_index("month_year", inplace=True)
 
-    df_gb_qt: pd.DataFrame = (
-        df_gb_mon_yr.resample("Q-JUN", convention="end").sum().reset_index()
-    )
+    df_gb_qt: pd.DataFrame = df.resample("Q-JUN", convention="end").sum().reset_index()
     df_gb_qt.rename({"month_year": "fy_quarter"}, axis=1, inplace=True)  # noqa
     df_gb_qt["fiscal_year"] = df_gb_qt.fy_quarter.dt.strftime("%f")
     df_gb_qt["quarter"] = df_gb_qt.fy_quarter.dt.strftime("%q")
@@ -255,7 +264,7 @@ def group_by_quarter(df: pd.DataFrame) -> pd.DataFrame:
 
 def plot_qt_report(
     df: pd.DataFrame,
-    project: str,
+    project: Project,
     fiscal_year: Literal["19", "20", "21"] = "21",
 ):
     """Plot total data accessed and total requests on a quarterly basis.
@@ -266,92 +275,69 @@ def plot_qt_report(
     :type project: str
     :param fiscal_year: The fiscal year to plot, defaults to "21"
     :type fiscal_year: Literal["19", "20", "21"], optional
-
-    # TODO: Refactor function to use generic plot method
     """
     df_fiscal_year = df.loc[df["fiscal_year"] == fiscal_year]
 
-    data_plot = df_fiscal_year.plot(
-        title=f"{project} FY{fiscal_year} Total Data Access ",
-        kind="bar",
+    generic_plotter(
+        df=df_fiscal_year,
+        title=f"{project} FY {fiscal_year} Total Data Access ",
         x="quarter",
+        xlabel="Quarter",
         y=["gb"],
-        legend=None,
-        rot=0,
+        ylabel="Data (GB)",
+        round_label=True,
     )
-    data_plot.set(xlabel="Quarter", ylabel="Total Data (GB)")
 
-    for p in data_plot.patches:
-        data_plot.annotate(
-            "%.2f" % p.get_height(),
-            (p.get_x() + p.get_width() / 2.0, p.get_height()),
-            ha="center",
-            va="center",
-            xytext=(0, 3.5),
-            textcoords="offset points",
-        )
-
-    plt.show()
-
-    plot_reqs = df_fiscal_year.plot(
-        title=f"{project} FY{fiscal_year} Total Requests ",
-        kind="bar",
+    generic_plotter(
+        df=df_fiscal_year,
+        title=f"{project} FY {fiscal_year} Total Requests ",
         x="quarter",
+        xlabel="Quarter",
         y=["requests"],
-        legend=None,
-        rot=0,
+        ylabel="Requests",
     )
-    plot_reqs.set(xlabel="Quarter", ylabel="Total Requests")
 
-    for p in plot_reqs.patches:
-        plot_reqs.annotate(
-            p.get_height(),
-            (p.get_x() + p.get_width() / 2.0, p.get_height()),
-            ha="center",
-            va="center",
-            xytext=(0, 3.5),
-            textcoords="offset points",
-        )
-
-    plt.show()
     # fig = plot_data.get_figure()
     # fig.savefig(f"e3sm_requests_by_month_{year}", dpi=fig.dpi, facecolor="w")
 
 
-def plot_by_month(df: pd.DataFrame, project: str):
-    # TODO: Update to support any y-axis
-    years = df["year"].unique().tolist()
+def generic_plotter(
+    df: pd.DataFrame,
+    title: str,
+    x: str,
+    xlabel: str,
+    y: List[str],
+    ylabel: str,
+    round_label: bool = False,
+):
+    plot = df.plot(
+        title=title,
+        kind="bar",
+        x=x,
+        y=y,
+        legend=None,
+        rot=0,
+    )
+    plot.set(xlabel=xlabel, ylabel=ylabel)
 
-    for year in years:
-        df_agg_year = df.loc[df["year"] == year]
-        plot = df_agg_year.plot(
-            title=f"{project} Requests by month ({year})",
-            kind="bar",
-            x="month",
-            y=["count"],
-            legend=None,
+    for p in plot.patches:
+        y_label = p.get_height()
+        if round_label:
+            y_label = "%.2f" % p.get_height()
+
+        plot.annotate(
+            y_label,
+            (p.get_x() + p.get_width() / 2.0, p.get_height()),
+            ha="center",
+            va="center",
+            xytext=(0, 3.5),
+            textcoords="offset points",
         )
-        plot.set(xlabel="month", ylabel="Requests")
-        plt.show()
-        fig = plot.get_figure()
-        fig.savefig(f"e3sm_requests_by_month_{year}", dpi=fig.dpi, facecolor="w")
+
+    plt.show()
 
 
-if __name__ == "__main__":
-    root_dir = "../access_logs"
-
-    # Parse request logs
-    rows = []
-    for log in tqdm(get_logs(root_dir)):
-        for line in filter_lines(log):
-            row = parse_log_line(line)
-            rows.append(row)
-
-    # Generate dataframe of parsed logs
-    df = pd.DataFrame(rows)
-    df["date"] = pd.to_datetime(df["date"])
-    df["month_year"] = df["date"].dt.to_period("M")
-
+def generate_qt_report(df: pd.DataFrame):
     # Total data accessed on a monthly basis (only successful requests)
     df_data_by_mon = df.copy()
     df_data_by_mon = df_data_by_mon[df_data_by_mon.status_code.str.contains("200|206")]
@@ -368,23 +354,43 @@ if __name__ == "__main__":
         subset=["month_year", "status_code"]
     ).reset_index(name="requests")
 
-    # Total data accessed on a quarterly basis
+    # Total data accessed and requests on a quarterly basis
     df_data_by_qt = group_by_quarter(df_data_by_mon)
-    # Total requests on a quarterly basis
     df_req_by_qt = group_by_quarter(df_req_by_mon)
 
     # Generate final quarterly report
     merge_cols = ["fy_quarter", "fiscal_year", "quarter", "start_date", "end_date"]
-    df_qt_report = pd.merge(
-        df_data_by_qt,
-        df_req_by_qt,
-        on=merge_cols,
-        how="inner",
-    )
+    df_qt_report = pd.merge(df_data_by_qt, df_req_by_qt, on=merge_cols, how="inner")
+
     # Reorder columns for printing output
     df_qt_report = df_qt_report[[*merge_cols, "gb", "requests"]]
-    print(df_qt_report)
+    return df_qt_report
+
+
+if __name__ == "__main__":
+    # Directory that contains the access logs
+    root_dir = "../access_logs"
+
+    # Parse request logs
+    log_rows: List[LogRow] = []
+    for log in tqdm(get_logs(root_dir)):
+        for line in filter_lines(log):
+            row = parse_log_line(line)
+            log_rows.append(row)
+
+    # Generate dataframe of parsed logs
+    df = pd.DataFrame(log_rows)
+    df["date"] = pd.to_datetime(df["date"])
+    df["month_year"] = df["date"].dt.to_period("M")
+
+    # E3SM
+    df_e3sm = df[df.project == "E3SM"]
+    df_e3sm_qt_report = generate_qt_report(df_e3sm)
+
+    # E3SM in CMIP6
+    df_e3sm_cmip6 = df[df.project == "E3SM in CMIP6"]
+    df_e3sm_cmip6_qt_report = generate_qt_report(df_e3sm_cmip6)
 
     # Plot results
-    # plot_requests_by_month(df, project="E3SM")
-    plot_qt_report(df_qt_report, project="E3SM", fiscal_year="20")
+    plot_qt_report(df_e3sm_qt_report, project="E3SM", fiscal_year="20")
+    plot_qt_report(df_e3sm_cmip6_qt_report, project="E3SM in CMIP6", fiscal_year="20")
