@@ -32,8 +32,8 @@ SCIENCE_DRIVERS = ["Biogeochemical Cycle", "Cryosphere", "Water Cycle"]
 
 # Type annotations
 Project = Literal["E3SM", "E3SM in CMIP6"]
-LogRow = TypedDict(
-    "LogRow",
+LogLine = TypedDict(
+    "LogLine",
     {
         "log_line": str,
         "date": pd.Timestamp,
@@ -86,6 +86,15 @@ def parse_args():
     return parser.parse_args()
 
 
+def parse_logs(logs_dir: str) -> List[LogLine]:
+    log_lines = []
+    for log in tqdm(get_logs(logs_dir)):
+        for line in filter_log_lines(log):
+            parsed_line = parse_log_line(line)
+            log_lines.append(parsed_line)
+    return log_lines
+
+
 def get_logs(path: str):
     """Fetch Apache logs from a path using a generator.
 
@@ -103,7 +112,7 @@ def get_logs(path: str):
             yield str(Path(root, file).absolute())
 
 
-def filter_lines(path: str):
+def filter_log_lines(path: str):
     """Filter log lines using a generator.
 
     Refer to README.md for the typical directory and dataset id structures.
@@ -127,20 +136,18 @@ def filter_lines(path: str):
                 yield line
 
 
-def parse_log_line(line: str):
-    """Parse log line to extract HTTP request info.
-    :param log_line: [description]
-    :type log_line: Dict[str, Any]
-    :return: [description]
-    :rtype: Dict[str, Any]
+def parse_log_line(line: str) -> LogLine:
+    """Parse raw log line to extract HTTP request info.
+
+    :param line: Raw log line from Apache log
+    :type line: str
+    :return: Parsed log row as a dictionary
+    :rtype: LogRow
     """
     attrs = line.split()
-
-    # None values are filled using helper functions.
-    timestamp = attrs[3]
     path = attrs[6].replace("%2F", "/")
 
-    parsed_line: LogRow = {
+    parsed_line: LogLine = {
         "log_line": line,
         "date": None,
         "year": None,
@@ -160,30 +167,33 @@ def parse_log_line(line: str):
         "campaign": None,
     }
 
-    parsed_line = parse_timestamp(timestamp, parsed_line)
-    parsed_line = parse_path_for_ids(parsed_line)
+    # None values are filled using helper functions.
+    parsed_line = parse_log_timestamp(parsed_line, raw_timestamp=attrs[3])
+    parsed_line = parse_log_path(parsed_line)
     return parsed_line
 
 
-def parse_timestamp(timestamp: str, log_line: LogRow) -> LogRow:
+def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
     """Parse a string timestamp for specific datetime values.
 
-    :param timestamp: [description]
-    :type timestamp: str
+
     :param log_row: [description]
     :type log_row: Dict[str, Any]
+    :param raw_timestamp: Raw timestamp from Apache log
+    Example: "[15/Jul/2019:03:18:49 -0700]"
+    :type raw_timestamp: str
     :return: [description]
     :rtype: Dict[str, Any]
     """
-    timestamp_str = timestamp[timestamp.find("[") + 1 : timestamp.find(":")]
+    timestamp = raw_timestamp[raw_timestamp.find("[") + 1 : raw_timestamp.find(":")]
 
-    log_line["date"] = datetime.strptime(timestamp_str, "%d/%b/%Y").date()
+    log_line["date"] = datetime.strptime(timestamp, "%d/%b/%Y").date()
     log_line["year"] = log_line["date"].year
     log_line["month"] = log_line["date"].month
     return log_line
 
 
-def parse_path_for_ids(log_row):
+def parse_log_path(log_row):
     """Parses the full path for the dataset and file ids.
 
     :param log_row: [description]
@@ -203,18 +213,18 @@ def parse_path_for_ids(log_row):
     facets = log_row["dataset_id"].split(".")
     log_row.update(
         {
-            "realm": extract_facets_from_dataset_id(facets, REALMS),
-            "data_type": extract_facets_from_dataset_id(facets, DATA_TYPES),
-            "time_frequency": extract_facets_from_dataset_id(facets, TIME_FREQUENCY),
-            "science_driver": extract_facets_from_dataset_id(facets, SCIENCE_DRIVERS),
-            "campaign": extract_facets_from_dataset_id(facets, CAMPAIGNS),
+            "realm": parse_id_for_facets(facets, REALMS),
+            "data_type": parse_id_for_facets(facets, DATA_TYPES),
+            "time_frequency": parse_id_for_facets(facets, TIME_FREQUENCY),
+            "science_driver": parse_id_for_facets(facets, SCIENCE_DRIVERS),
+            "campaign": parse_id_for_facets(facets, CAMPAIGNS),
         }
     )
 
     return log_row
 
 
-def extract_facets_from_dataset_id(
+def parse_id_for_facets(
     file_facets: List[str],
     options: List[str]
     # TODO: Refactor this function
@@ -236,40 +246,14 @@ def extract_facets_from_dataset_id(
     return facet
 
 
-def group_by_quarter(df: pd.DataFrame) -> pd.DataFrame:
-    """Groups a pandas DataFrame by E3SM quarters.
-
-    :param df: [description]
-    :type df: pd.DataFrame
-    :return: [description]
-    :rtype: pd.DataFrame
-
-    # TODO: Confirm resampling quarter start month, it is based on IG FY
-    """
-    # Set index to month_year in order to resample on quarters
-    df.set_index("month_year", inplace=True)
-
-    df_gb_qt: pd.DataFrame = df.resample("Q-JUN", convention="end").sum().reset_index()
-    df_gb_qt.rename({"month_year": "fy_quarter"}, axis=1, inplace=True)  # noqa
-    df_gb_qt["fiscal_year"] = df_gb_qt.fy_quarter.dt.strftime("%f")
-    df_gb_qt["quarter"] = df_gb_qt.fy_quarter.dt.strftime("%q")
-    df_gb_qt["start_date"] = df_gb_qt.apply(
-        lambda row: row.fy_quarter.start_time.date(), axis=1
-    )
-    df_gb_qt["end_date"] = df_gb_qt.apply(
-        lambda row: row.fy_quarter.end_time.date(), axis=1
-    )
-    return df_gb_qt
-
-
 def plot_qt_report(
     df: pd.DataFrame,
     project: Project,
     fiscal_year: Literal["19", "20", "21"] = "21",
 ):
-    """Plot total data accessed and total requests on a quarterly basis.
+    """Plot quarterly report for total data accessed and total requests.
 
-    :param df: DataFrame containing quarterly data
+    :param df: DataFrame containing quarterly report.
     :type df: pd.DataFrame
     :param project: The related project
     :type project: str
@@ -337,7 +321,14 @@ def generic_plotter(
     plt.show()
 
 
-def generate_qt_report(df: pd.DataFrame):
+def generate_qt_report(df: pd.DataFrame) -> pd.DataFrame:
+    """Generates the quarterly report for total data accessed and requests.
+
+    :param df: DataFrame containing monthly report.
+    :type df: pd.DataFrame
+    :return: DataFrame containing quarterly report.
+    :rtype: pd.DataFrame
+    """
     # Total data accessed on a monthly basis (only successful requests)
     df_data_by_mon = df.copy()
     df_data_by_mon = df_data_by_mon[df_data_by_mon.status_code.str.contains("200|206")]
@@ -367,27 +358,49 @@ def generate_qt_report(df: pd.DataFrame):
     return df_qt_report
 
 
+def group_by_quarter(df: pd.DataFrame) -> pd.DataFrame:
+    """Groups a pandas DataFrame by E3SM quarters.
+
+    :param df: DataFrame containing monthly report.
+    :type df: pd.DataFrame
+    :return: DataFrame containing quarterly report.
+    :rtype: pd.DataFrame
+
+    # TODO: Confirm resampling quarter start month, it is based on IG FY
+    """
+    # Set index to month_year in order to resample on quarters
+    df.set_index("month_year", inplace=True)
+
+    df_gb_qt: pd.DataFrame = df.resample("Q-JUN", convention="end").sum().reset_index()
+    df_gb_qt.rename({"month_year": "fy_quarter"}, axis=1, inplace=True)  # noqa
+    df_gb_qt["fiscal_year"] = df_gb_qt.fy_quarter.dt.strftime("%f")
+    df_gb_qt["quarter"] = df_gb_qt.fy_quarter.dt.strftime("%q")
+    df_gb_qt["start_date"] = df_gb_qt.apply(
+        lambda row: row.fy_quarter.start_time.date(), axis=1
+    )
+    df_gb_qt["end_date"] = df_gb_qt.apply(
+        lambda row: row.fy_quarter.end_time.date(), axis=1
+    )
+    return df_gb_qt
+
+
 if __name__ == "__main__":
     # Directory that contains the access logs
-    root_dir = "../access_logs"
+    logs_dir = "../access_logs"
 
-    # Parse request logs
-    log_rows: List[LogRow] = []
-    for log in tqdm(get_logs(root_dir)):
-        for line in filter_lines(log):
-            row = parse_log_line(line)
-            log_rows.append(row)
+    # Parse Apache access logs
+    log_lines: List[LogLine] = parse_logs(logs_dir)
 
-    # Generate dataframe of parsed logs
-    df = pd.DataFrame(log_rows)
+    # Generate dataframe from parsed log lines
+    df = pd.DataFrame(log_lines)
     df["date"] = pd.to_datetime(df["date"])
     df["month_year"] = df["date"].dt.to_period("M")
 
-    # E3SM
+    # E3SM quarterly report
     df_e3sm = df[df.project == "E3SM"]
     df_e3sm_qt_report = generate_qt_report(df_e3sm)
 
-    # E3SM in CMIP6
+    # E3SM in CMIP6 quarterly report
     df_e3sm_cmip6 = df[df.project == "E3SM in CMIP6"]
     df_e3sm_cmip6_qt_report = generate_qt_report(df_e3sm_cmip6)
 
