@@ -41,10 +41,12 @@ def parse_args():
 
 
 def get_logs(path: str):
-    """Fetch the logs from the specified path.
+    """Fetch Apache logs from a path using a generator.
 
-    :param path:
-    :return:
+    :param path: [description]
+    :type path: str
+    :yield: [description]
+    :rtype: [type]
     """
     for root, dirs, files in os.walk(path):
         if not files:
@@ -56,12 +58,12 @@ def get_logs(path: str):
 
 
 def filter_lines(path: str):
-    """Filter lines for parameters specific to a project.
+    """Filter log lines using a generator.
 
-    Currently, it only supports E3SM
-    # TODO: Support E3SM project in CMIP6
-    :param path:
-    :return:
+    :param path: [description]
+    :type path: str
+    :yield: [description]
+    :rtype: [type]
     """
     with open(path, "r") as instream:
         while (line := instream.readline()) :
@@ -76,65 +78,6 @@ def filter_lines(path: str):
                 and "aggregation" not in line
             ):
                 yield line
-
-
-def parse_file_id(log_row):
-    """Parse file id for metadata.
-
-    Example: 'E3SM.1_0.historical.1deg_atm_60-30km_ocean.sea-ice.180x360.model-output.mon.ens1.v1'
-
-    :param file_id:
-    :return:
-    """
-    try:
-        idx = log_row["full_path"].index("user_pub_work") + len("user_pub_work") + 1
-    except ValueError:
-        idx = None
-        print("ERROR: " + log_row["full_path"])
-
-    log_row["file_id"] = ".".join(log_row["full_path"][idx:].split("/")[:-1])
-
-    facets = log_row["file_id"].split(".")
-    log_row["realm"] = extract_facet(facets, "realm", REALMS)
-    log_row["data_type"] = extract_facet(facets, "data_type", DATA_TYPES)
-    log_row["science_driver"] = extract_facet(facets, "science_driver", SCIENCE_DRIVERS)
-    log_row["campaign"] = extract_facet(facets, "campaign", CAMPAIGNS)
-
-    return log_row
-
-
-def extract_facet(
-    file_facets: List[str], facet_name: str, options: List[str]
-) -> Optional[str]:
-    facet = None
-    for option in options:
-        if option in file_facets:
-            facet = option
-
-    return facet
-
-
-def parse_timestamp(timestamp: str, log_row: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract string date ('30/Aug/2019') and convert to date object ('2019-08-30').
-
-    :param timestamp:
-    :param log_row:
-    :return:
-    """
-    timestamp_str = timestamp[timestamp.find("[") + 1 : timestamp.find(":")]
-    log_row["date"] = datetime.strptime(timestamp_str, "%d/%b/%Y").date()
-    log_row["year"] = log_row["date"].year
-    log_row["month"] = log_row["date"].month
-
-    return log_row
-
-
-def identify_requester(ip: str) -> None:
-    # try:
-    #     log_row['requester_id'] = IPWhois.lookup_rdap(IPWhois(log_row.get('requester_ip')))
-    # except exceptions.IPDefinedError:
-    #     log_row['requester_id'] = None
-    pass
 
 
 def parse_log_line(log_line: str):
@@ -160,13 +103,14 @@ def parse_log_line(log_line: str):
         '"Wget/1.14',
         '(linux-gnu)"']
 
-
     How to read Apache log line:
 
         * https://www.keycdn.com/support/apache-access-log#reading-the-apache-access-logs
 
-    :param log_line:
-    :return:
+    :param log_line: [description]
+    :type log_line: Dict[str, Any]
+    :return: [description]
+    :rtype: Dict[str, Any]
     """
     attrs = log_line.split()
     log_row: Dict[str, Any] = {
@@ -186,6 +130,25 @@ def parse_log_line(log_line: str):
     return log_row
 
 
+def parse_timestamp(timestamp: str, log_row: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse a string timestamp for specific datetime values.
+
+    :param timestamp: [description]
+    :type timestamp: str
+    :param log_row: [description]
+    :type log_row: Dict[str, Any]
+    :return: [description]
+    :rtype: Dict[str, Any]
+    """
+
+    timestamp_str = timestamp[timestamp.find("[") + 1 : timestamp.find(":")]
+    log_row["date"] = datetime.strptime(timestamp_str, "%d/%b/%Y").date()
+    log_row["year"] = log_row["date"].year
+    log_row["month"] = log_row["date"].month
+
+    return log_row
+
+
 def reqs_by_mon_yr(df: pd.DataFrame) -> pd.DataFrame:
     df_reqs = df.copy()
 
@@ -194,6 +157,45 @@ def reqs_by_mon_yr(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return df_reqs
+
+
+def parse_file_id(log_row):
+    """Parse a file's id to extract facet information.
+
+    :param log_row: [description]
+    :type log_row: [type]
+    :return: [description]
+    :rtype: [type]
+    """
+
+    try:
+        idx = log_row["full_path"].index("user_pub_work") + len("user_pub_work") + 1
+    except ValueError:
+        idx = None
+        print("ERROR: " + log_row["full_path"])
+
+    log_row["file_id"] = ".".join(log_row["full_path"][idx:].split("/")[:-1])
+
+    facets = log_row["file_id"].split(".")
+
+    # TODO: Refactor an
+    log_row["realm"] = extract_facet(facets, "realm", REALMS)
+    log_row["data_type"] = extract_facet(facets, "data_type", DATA_TYPES)
+    log_row["science_driver"] = extract_facet(facets, "science_driver", SCIENCE_DRIVERS)
+    log_row["campaign"] = extract_facet(facets, "campaign", CAMPAIGNS)
+
+    return log_row
+
+
+def extract_facet(
+    file_facets: List[str], facet_name: str, options: List[str]
+) -> Optional[str]:
+    facet = None
+    for option in options:
+        if option in file_facets:
+            facet = option
+
+    return facet
 
 
 def data_by_mon_yr(df: pd.DataFrame) -> pd.DataFrame:
@@ -210,6 +212,15 @@ def data_by_mon_yr(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def group_by_quarter(df: pd.DataFrame) -> pd.DataFrame:
+    """Groups a pandas DataFrame by E3SM quarters.
+
+    :param df: [description]
+    :type df: pd.DataFrame
+    :return: [description]
+    :rtype: pd.DataFrame
+
+    # TODO: Confirm resampling quarter start month
+    """
     df_gb_mon_yr = df.copy()
     # Set index to month_year in order to resample on quarters
     df_gb_mon_yr = df_gb_mon_yr.set_index("month_year")
@@ -277,6 +288,7 @@ def plot_requests_by_month(df: pd.DataFrame, project: str):
 
 
 def main():
+    # root_dir = "/p/user_pub/e3sm/baldwin32/access_logs"
     root_dir = "../access_logs"
     requests = []
     for log in tqdm(get_logs(root_dir)):
@@ -330,7 +342,7 @@ def main():
 
     # Plot results
     # plot_requests_by_month(df, project="E3SM")
-    plot_qt_report(df_qt_report, project="E3SM", fiscal_year="19")
+    plot_qt_report(df_qt_report, project="E3SM", fiscal_year="20")
 
 
 if __name__ == "__main__":
