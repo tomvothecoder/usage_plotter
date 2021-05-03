@@ -2,12 +2,13 @@ import argparse
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Literal, Optional, TypedDict, Union
+from typing import List, Literal, Optional, TypedDict
 
-import matplotlib.pyplot as plt
 import pandas as pd
 from dotenv.main import dotenv_values, find_dotenv
 from tqdm import tqdm
+
+from usage_plotter.utils import bytes_to
 
 # Type annotations
 Project = Literal["E3SM", "E3SM in CMIP6"]
@@ -36,7 +37,6 @@ LogLine = TypedDict(
 
 # Environment configuration
 CONFIG = dotenv_values(find_dotenv())
-
 # E3SM Facets that are available in file/dataset id and directory format
 AVAILABLE_FACETS = {
     "realm": ["ocean", "atmos", "land", "sea-ice"],
@@ -60,28 +60,6 @@ AVAILABLE_FACETS = {
 }
 
 
-def bytes_to(
-    bytes: Union[str, int],
-    to: Literal["kb", "mb", "gb", "tb"],
-    bsize: Literal[1024, 1000] = 1024,
-) -> float:
-    """Convert bytes to another unit.
-
-    :param bytes: Bytes value
-    :type bytes: Union[str, int]
-    :param to: Unit to convert to
-    :type to: Literal["kb", "mb", "gb", "tb"]
-    :param bsize: Bytes size, defaults to 1024
-    :type bsize: int, optional
-    :return: Converted data units
-    :rtype: float
-    """
-    map_sizes = {"kb": 1, "mb": 2, "gb": 3, "t": 4}
-
-    bytes_float = float(bytes)
-    return bytes_float / (bsize ** map_sizes[to])
-
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -90,13 +68,25 @@ def parse_args():
     return parser.parse_args()
 
 
-def parse_logs(logs_dir: str) -> List[LogLine]:
-    log_lines = []
-    for log in tqdm(get_logs(logs_dir)):
+def parse_logs(logs_path: str) -> pd.DataFrame:
+    """Main parsing function, parses Apache logs into a DataFrame.
+
+    :param logs_path: Path to access logs, configured using .env file
+    :type logs_path: str
+    :return: DataFrame containing parsed
+    :rtype: pd.DataFrame
+    """
+    log_lines: List[LogLine] = []
+    for log in tqdm(get_logs(logs_path)):
         for line in filter_log_lines(log):
             parsed_line = parse_log_line(line)
             log_lines.append(parsed_line)
-    return log_lines
+
+    df = pd.DataFrame(log_lines)
+    df["date"] = pd.to_datetime(df["date"])
+    df["month_year"] = df["date"].dt.to_period("M")
+
+    return df
 
 
 def get_logs(path: str):
@@ -223,142 +213,126 @@ def parse_log_path(log_line, path):
     return log_line
 
 
-def plot_qt_report(
-    df: pd.DataFrame,
-    project: Project,
-    fiscal_year: Literal["19", "20", "21"] = "21",
-):
-    """Plot quarterly report for total data accessed and total requests.
+# def groupby_facet(df: pd.DataFrame, facet: str) -> pd.DataFrame:
+#     df_gb_facet = df.copy()
+#     df_gb_facet["gb"] = df_gb_facet.mb.div(1024)
 
-    :param df: DataFrame containing quarterly report.
-    :type df: pd.DataFrame
-    :param project: The related project
-    :type project: str
-    :param fiscal_year: The fiscal year to plot, defaults to "21"
-    :type fiscal_year: Literal["19", "20", "21"], optional
-    """
-    df_fiscal_year = df.loc[df["fiscal_year"] == fiscal_year]
+#     df_gb_facet = (
+#         df_gb_facet.groupby(by=["project", "month_year", facet])
+#         .agg({"gb": "sum", "log_line": "count"})
+#         .reset_index()
+#     )
+#     df_gb_facet.rename(columns={"log_line": "requests"}, inplace=True)
 
-    generic_plotter(
-        df=df_fiscal_year,
-        title=f"{project} FY {fiscal_year} Total Data Access ",
-        x="quarter",
-        xlabel="Quarter",
-        y=["gb"],
-        ylabel="Data (GB)",
-        round_label=True,
-    )
-
-    generic_plotter(
-        df=df_fiscal_year,
-        title=f"{project} FY {fiscal_year} Total Requests ",
-        x="quarter",
-        xlabel="Quarter",
-        y=["requests"],
-        ylabel="Requests",
-    )
-
-    # fig = plot_data.get_figure()
-    # fig.savefig(f"e3sm_requests_by_month_{year}", dpi=fig.dpi, facecolor="w")
+#     return df_gb_facet
 
 
-def generic_plotter(
-    df: pd.DataFrame,
-    title: str,
-    x: str,
-    xlabel: str,
-    y: List[str],
-    ylabel: str,
-    round_label: bool = False,
-):
-    plot = df.plot(
-        title=title,
-        kind="bar",
-        x=x,
-        y=y,
-        legend=None,
-        rot=0,
-    )
-    plot.set(xlabel=xlabel, ylabel=ylabel)
-
-    for p in plot.patches:
-        y_label = p.get_height()
-        if round_label:
-            y_label = "%.2f" % p.get_height()
-
-        plot.annotate(
-            y_label,
-            (p.get_x() + p.get_width() / 2.0, p.get_height()),
-            ha="center",
-            va="center",
-            xytext=(0, 3.5),
-            textcoords="offset points",
-        )
-
-    plt.show()
-
-
-def generate_qt_report(df: pd.DataFrame) -> pd.DataFrame:
-    """Generates the quarterly report for total data accessed and requests.
+def gen_quarterly_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
+    """Generates the quarterly report for total requests and data accessed.
 
     :param df: DataFrame containing monthly report.
     :type df: pd.DataFrame
     :return: DataFrame containing quarterly report.
     :rtype: pd.DataFrame
     """
+    agg_cols = ["month_year"]
+    if facet:
+        agg_cols.append(facet)
+
+    # Total requests on a monthly basis
+    df_req_by_mon = df.copy()
+    df_req_by_mon = df_req_by_mon.value_counts(subset=[*agg_cols]).reset_index(
+        name="requests"
+    )
+
     # Total data accessed on a monthly basis (only successful requests)
     df_data_by_mon = df.copy()
     df_data_by_mon = df_data_by_mon[df_data_by_mon.status_code.str.contains("200|206")]
     df_data_by_mon = (
-        df_data_by_mon.groupby(by=["month_year", "status_code"])
+        df_data_by_mon.groupby(by=[*agg_cols, "status_code"])
         .agg({"mb": "sum"})
         .reset_index()
     )
     df_data_by_mon["gb"] = df_data_by_mon.mb.div(1024)
 
-    # Total requests on a monthly basis
-    df_req_by_mon = df.copy()
-    df_req_by_mon = df_req_by_mon.value_counts(
-        subset=["month_year", "status_code"]
-    ).reset_index(name="requests")
-
-    # Total data accessed and requests on a quarterly basis
-    df_data_by_qt = group_by_quarter(df_data_by_mon)
-    df_req_by_qt = group_by_quarter(df_req_by_mon)
+    # Total requests and data accessed on a quarterly basis
+    df_req_by_qt = resample_to_quarter(df_req_by_mon, facet)
+    df_data_by_qt = resample_to_quarter(df_data_by_mon, facet)
 
     # Generate final quarterly report
     merge_cols = ["fy_quarter", "fiscal_year", "quarter", "start_date", "end_date"]
+    if facet:
+        merge_cols.append(facet)
     df_qt_report = pd.merge(df_data_by_qt, df_req_by_qt, on=merge_cols, how="inner")
 
     # Reorder columns for printing output
-    df_qt_report = df_qt_report[[*merge_cols, "gb", "requests"]]
+    df_qt_report = df_qt_report[[*merge_cols, "requests", "gb"]]
     return df_qt_report
 
 
-def group_by_quarter(df: pd.DataFrame) -> pd.DataFrame:
+def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
     """Groups a pandas DataFrame by E3SM quarters.
 
     :param df: DataFrame containing monthly report.
     :type df: pd.DataFrame
     :return: DataFrame containing quarterly report.
     :rtype: pd.DataFrame
-
-    # TODO: Confirm resampling quarter start month, it is based on IG FY
     """
     # Set index to month_year in order to resample on quarters
-    df.set_index("month_year", inplace=True)
+    df_resample = df.copy().set_index("month_year")
+    if facet:
+        df_resample = df_resample.groupby(facet)
 
-    df_gb_qt: pd.DataFrame = df.resample("Q-JUN", convention="end").sum().reset_index()
-    df_gb_qt.rename({"month_year": "fy_quarter"}, axis=1, inplace=True)  # noqa
-    df_gb_qt["fiscal_year"] = df_gb_qt.fy_quarter.dt.strftime("%f")
-    df_gb_qt["quarter"] = df_gb_qt.fy_quarter.dt.strftime("%q")
-    df_gb_qt["start_date"] = df_gb_qt.apply(
+    df_qt: pd.DataFrame = (
+        df_resample.resample("Q-JUN", convention="end").sum().reset_index()
+    )
+    df_qt.rename({"month_year": "fy_quarter"}, axis=1, inplace=True)  # noqa
+    df_qt["fiscal_year"] = df_qt.fy_quarter.dt.strftime("%f")
+    df_qt["quarter"] = df_qt.fy_quarter.dt.strftime("%q")
+    df_qt["start_date"] = df_qt.apply(
         lambda row: row.fy_quarter.start_time.date(), axis=1
     )
-    df_gb_qt["end_date"] = df_gb_qt.apply(
-        lambda row: row.fy_quarter.end_time.date(), axis=1
+    df_qt["end_date"] = df_qt.apply(lambda row: row.fy_quarter.end_time.date(), axis=1)
+    return df_qt
+
+
+def plot_report(
+    df: pd.DataFrame,
+    project: Project,
+    facet: str,
+    fiscal_year: Literal[19, 20, 21] = 21,
+):
+    df_fy = df.loc[df["fiscal_year"] == str(fiscal_year)]
+
+    pd.pivot_table(
+        df_fy,
+        index="quarter",
+        values="gb",
+        columns=facet,
+        aggfunc="sum",
+    ).plot(
+        title=f"{project} FY{fiscal_year} Total Requests ",
+        xlabel="Quarter",
+        ylabel="Requests",
+        kind="bar",
+        stacked=True,
+        rot=0,
     )
-    return df_gb_qt
+
+    pd.pivot_table(
+        df_fy,
+        index="quarter",
+        values="requests",
+        columns=facet,
+        aggfunc="sum",
+    ).plot(
+        title=f"{project} FY{fiscal_year} Total Data Access (GB) ",
+        xlabel="Quarter",
+        ylabel="Data (GB)",
+        kind="bar",
+        stacked=True,
+        rot=0,
+    )
 
 
 if __name__ == "__main__":
@@ -368,25 +342,29 @@ if __name__ == "__main__":
     if logs_path is None or logs_path == "":
         raise ValueError("LOGS_PATH is not set in .env file!")
 
-    # Parse Apache access logs
-    log_lines: List[LogLine] = parse_logs(logs_path)
-
-    # Generate dataframe from parsed log lines
-    df = pd.DataFrame(log_lines)
-    df["date"] = pd.to_datetime(df["date"])
-    df["month_year"] = df["date"].dt.to_period("M")
-
-    # E3SM quarterly report
-    df_e3sm = df[df.project == "E3SM"]
-    df_e3sm_qt_report = generate_qt_report(df_e3sm)
-
-    # E3SM in CMIP6 quarterly report
-    df_e3sm_cmip6 = df[df.project == "E3SM in CMIP6"]
-    df_e3sm_cmip6_qt_report = generate_qt_report(df_e3sm_cmip6)
-
-    # Plot results
-    plot_qt_report(df_e3sm_qt_report, project="E3SM", fiscal_year="20")
-    plot_qt_report(df_e3sm_cmip6_qt_report, project="E3SM in CMIP6", fiscal_year="20")
+    # Parse Apache access logs into a DataFrame.
+    df: pd.DataFrame = parse_logs(logs_path)
 
     # Tier2 Requirements
-    # - Stacked plot divid by campaigns, science drivers, time frequency, activity
+    # Stacked plot divided by campaigns, science drivers
+
+    # E3SM quarterly report
+    # =====================
+    df_e3sm = df[df.project == "E3SM"]
+
+    # Time frequency
+    df_e3sm_tf = gen_quarterly_report(df_e3sm, facet="time_frequency")
+    plot_report(df_e3sm_tf, project="E3SM", facet="time_frequency", fiscal_year=20)
+
+    # E3SM in CMIP6 quarterly report
+    # ==============================
+    df_e3sm_cmip6 = df[df.project == "E3SM in CMIP6"]
+
+    # Activity
+    df_e3sm_cmip6_activity = gen_quarterly_report(df_e3sm_cmip6, facet="activity")
+    plot_report(
+        df_e3sm_cmip6_activity,
+        project="E3SM in CMIP6",
+        facet="activity",
+        fiscal_year=20,
+    )
