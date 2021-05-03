@@ -40,6 +40,7 @@ CONFIG = dotenv_values(find_dotenv())
 AVAILABLE_FACETS = {
     "realm": ["ocean", "atmos", "land", "sea-ice"],
     "data_type": ["time-series", "climo", "model-output", "mapping", "restart"],
+    # E3SM only
     "time_frequency": [
         "3hr",
         "3hr_snap",
@@ -53,9 +54,11 @@ AVAILABLE_FACETS = {
         "mon",
         "monClim",
     ],
+    # E3SM in CMIP6
+    "activity": ["C4MIP", "CMIP", "DAMIP", "ScenarioMIP"],
+    # Unavailable in templates
     "science_driver": ["Biogeochemical Cycle", "Cryosphere", "Water Cycle"],
     "campaign": ["BGC-v1", "Cryosphere-v1", "DECK-v1", "HighResMIP-v1"],
-    "activity": ["C4MIP", "CMIP", "DAMIP", "ScenarioMIP"],
 }
 
 
@@ -204,26 +207,14 @@ def parse_log_path(log_line: LogLine, path):
     return log_line
 
 
-# def groupby_facet(df: pd.DataFrame, facet: str) -> pd.DataFrame:
-#     df_gb_facet = df.copy()
-#     df_gb_facet["gb"] = df_gb_facet.mb.div(1024)
-
-#     df_gb_facet = (
-#         df_gb_facet.groupby(by=["project", "month_year", facet])
-#         .agg({"gb": "sum", "log_line": "count"})
-#         .reset_index()
-#     )
-#     df_gb_facet.rename(columns={"log_line": "requests"}, inplace=True)
-
-#     return df_gb_facet
-
-
 def gen_quarterly_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
     """Generates the quarterly report for total requests and data accessed.
 
     :param df: DataFrame containing monthly report.
     :type df: pd.DataFrame
-    :return: DataFrame containing quarterly report.
+    :param facet: Facet to aggregate and merge on, defaults to None
+    :type facet: Optional[str], optional
+    :return: [description]
     :rtype: pd.DataFrame
     """
     agg_cols = ["month_year"]
@@ -262,7 +253,7 @@ def gen_quarterly_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.Da
 
 
 def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
-    """Groups a pandas DataFrame by E3SM quarters.
+    """Resamples a DataFrame from monthly to quarterly.
 
     :param df: DataFrame containing monthly report.
     :type df: pd.DataFrame
@@ -297,7 +288,7 @@ def plot_report(
 
     pd.pivot_table(
         df_fy,
-        index="quarter",
+        index=["quarter", "year"],
         values="gb",
         columns=facet,
         aggfunc="sum",
@@ -308,6 +299,7 @@ def plot_report(
         kind="bar",
         stacked=True,
         rot=0,
+        figsize=(10, 10),
     )
 
     pd.pivot_table(
@@ -327,17 +319,11 @@ def plot_report(
 
 
 def main():
-    # Directory that contains the access logs
     logs_path = CONFIG.get("LOGS_PATH")
-
     if logs_path is None or logs_path == "":
         raise ValueError("LOGS_PATH is not set in .env file!")
 
-    # Parse Apache access logs into a DataFrame.
     df: pd.DataFrame = parse_logs(logs_path)
-
-    # Tier2 Requirements
-    # Stacked plot divided by campaigns, science drivers
 
     # E3SM quarterly report
     # =====================
