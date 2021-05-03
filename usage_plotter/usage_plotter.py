@@ -9,27 +9,6 @@ import pandas as pd
 from pandas.core import generic  # noqa
 from tqdm import tqdm
 
-# E3SM Facets that are available in file/dataset id and directory format
-REALMS = ["ocean", "atmos", "land", "sea-ice"]
-DATA_TYPES = ["time-series", "climo", "model-output", "mapping", "restart"]
-TIME_FREQUENCY = [
-    "3hr",
-    "3hr_snap",
-    "5day_snap",
-    "6hr",
-    "6hr_ave",
-    "6hr_snap",
-    "day",
-    "day_cosp",
-    "fixed",
-    "mon",
-    "monClim",
-]
-
-# Unavailable
-CAMPAIGNS = ["BGC-v1", "Cryosphere-v1", "DECK-v1", "HighResMIP-v1"]
-SCIENCE_DRIVERS = ["Biogeochemical Cycle", "Cryosphere", "Water Cycle"]
-
 # Type annotations
 Project = Literal["E3SM", "E3SM in CMIP6"]
 LogLine = TypedDict(
@@ -54,6 +33,28 @@ LogLine = TypedDict(
         "campaign": Optional[str],
     },
 )
+
+# E3SM Facets that are available in file/dataset id and directory format
+AVAILABLE_FACETS = {
+    "realm": ["ocean", "atmos", "land", "sea-ice"],
+    "data_type": ["time-series", "climo", "model-output", "mapping", "restart"],
+    "time_frequency": [
+        "3hr",
+        "3hr_snap",
+        "5day_snap",
+        "6hr",
+        "6hr_ave",
+        "6hr_snap",
+        "day",
+        "day_cosp",
+        "fixed",
+        "mon",
+        "monClim",
+    ],
+    "science_driver": ["Biogeochemical Cycle", "Cryosphere", "Water Cycle"],
+    "campaign": ["BGC-v1", "Cryosphere-v1", "DECK-v1", "HighResMIP-v1"],
+    "activity": ["C4MIP", "CMIP", "DAMIP", "ScenarioMIP"],
+}
 
 
 def bytes_to(
@@ -167,15 +168,14 @@ def parse_log_line(line: str) -> LogLine:
         "campaign": None,
     }
 
-    # None values are filled using helper functions.
+    # None values are filled using helper functions below.
     parsed_line = parse_log_timestamp(parsed_line, raw_timestamp=attrs[3])
-    parsed_line = parse_log_path(parsed_line)
+    parsed_line = parse_log_path(parsed_line, path)
     return parsed_line
 
 
 def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
     """Parse a string timestamp for specific datetime values.
-
 
     :param log_row: [description]
     :type log_row: Dict[str, Any]
@@ -193,57 +193,32 @@ def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
     return log_line
 
 
-def parse_log_path(log_row):
-    """Parses the full path for the dataset and file ids.
+def parse_log_path(log_line, path):
+    """Parses the full path for the dataset and file ids and facets.
 
-    :param log_row: [description]
-    :type log_row: [type]
+    :param log_line: [description]
+    :type log_line: [type]
     :return: [description]
     :rtype: [type]
     """
     try:
-        idx = log_row["path"].index("user_pub_work") + len("user_pub_work") + 1
+        idx = path.index("user_pub_work") + len("user_pub_work") + 1
     except ValueError:
         # This usually means an HTTP 302/404 request (incorrect path)
         idx = None
 
-    log_row["dataset_id"] = ".".join(log_row["path"][idx:].split("/")[:-1])
-    log_row["file_id"] = log_row["path"].split("/")[-1]
+    log_line["dataset_id"] = ".".join(path[idx:].split("/")[:-1])
+    log_line["file_id"] = path.split("/")[-1]
 
-    facets = log_row["dataset_id"].split(".")
-    log_row.update(
-        {
-            "realm": parse_id_for_facets(facets, REALMS),
-            "data_type": parse_id_for_facets(facets, DATA_TYPES),
-            "time_frequency": parse_id_for_facets(facets, TIME_FREQUENCY),
-            "science_driver": parse_id_for_facets(facets, SCIENCE_DRIVERS),
-            "campaign": parse_id_for_facets(facets, CAMPAIGNS),
-        }
-    )
+    dataset_facets = log_line["dataset_id"].split(".")
+    for facet, options in AVAILABLE_FACETS.items():
+        matching_facet = None
+        for option in options:
+            if option in dataset_facets:
+                matching_facet = option
+        log_line[facet] = matching_facet
 
-    return log_row
-
-
-def parse_id_for_facets(
-    file_facets: List[str],
-    options: List[str]
-    # TODO: Refactor this function
-) -> Optional[str]:
-    """Extracts facets from a dataset id.
-
-    :param file_facets: [description]
-    :type file_facets: List[str]
-    :param options: [description]
-    :type options: List[str]
-    :return: [description]
-    :rtype: Optional[str]
-    """
-    facet = None
-    for option in options:
-        if option in file_facets:
-            facet = option
-
-    return facet
+    return log_line
 
 
 def plot_qt_report(
@@ -407,3 +382,6 @@ if __name__ == "__main__":
     # Plot results
     plot_qt_report(df_e3sm_qt_report, project="E3SM", fiscal_year="20")
     plot_qt_report(df_e3sm_cmip6_qt_report, project="E3SM in CMIP6", fiscal_year="20")
+
+    # Tier2 Requirements
+    # - Stacked plot divid by campaigns, science drivers, time frequency, activity

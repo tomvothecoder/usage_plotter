@@ -6,9 +6,6 @@ How to read Apache logs:  https://www.keycdn.com/support/apache-access-log#readi
 
 ## How It Works
 
-
-
-
     1) Read in logs, here's an example line:
         "128.211.148.13 - - [22/Sep/2019:12:01:01 -0700] "GET /thredds/fileServer/user_pub_work/E3SM/1_0/historical/1deg_atm_60-30km_ocean/land/native/model-output/mon/ens1/v1/20180215.DECKv1b_H1.ne30_oEC.edison.clm2.h0.1850-01.nc HTTP/1.1" 200 91564624 "-" "Wget/1.14 (linux-gnu)"\n"
 
@@ -33,6 +30,7 @@ How to read Apache logs:  https://www.keycdn.com/support/apache-access-log#readi
         "E3SM.1_0.historical.1deg_atm_60-30km_ocean.land.native.model-output.mon.ens1.v1"
     5) Parse directory for file id:
         "20180215.DECKv1b_H1.ne30_oEC.edison.clm2.h0.1850-01.nc"
+
 ## E3SM Guidelines
 ### Example log line
 
@@ -61,6 +59,6 @@ How to read Apache logs:  https://www.keycdn.com/support/apache-access-log#readi
 
 ## E3SM CMIP6 Variables Guidelines
 
-### Example Log Line:
+### Example Log Line
 
 `123.123.123.123 - - [18/Jul/2019:00:52:54 -0700] "GET /thredds/fileServer/user_pub_work/E3SM/1_0/cmip6_variables/piControl/CMIP6/CMIP/E3SM-Project/E3SM-1-0/piControl/r1i1p1f1/Amon/prc/gr/v20190206/prc_Amon_E3SM-1-0_piControl_r1i1p1f1_gr_000101-050012.nc HTTP/1.0" 404 - "-" "Wget/1.12 (linux-gnu)"`
