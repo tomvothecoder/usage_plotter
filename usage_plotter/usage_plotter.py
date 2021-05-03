@@ -1,4 +1,3 @@
-import argparse
 import os
 from datetime import datetime
 from pathlib import Path
@@ -17,11 +16,11 @@ LogLine = TypedDict(
     {
         "log_line": str,
         "date": pd.Timestamp,
-        "year": Optional[str],
-        "month": Optional[str],
+        "year": Optional[int],
+        "month": Optional[int],
         "requester_ip": str,
         "path": str,
-        "dataset_id": Optional[str],
+        "dataset_id": str,
         "file_id": Optional[str],
         "access_type": str,
         "status_code": str,
@@ -58,14 +57,6 @@ AVAILABLE_FACETS = {
     "campaign": ["BGC-v1", "Cryosphere-v1", "DECK-v1", "HighResMIP-v1"],
     "activity": ["C4MIP", "CMIP", "DAMIP", "ScenarioMIP"],
 }
-
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "root", help="path to directory full of access logs for ESGF datasets"
-    )
-    return parser.parse_args()
 
 
 def parse_logs(logs_path: str) -> pd.DataFrame:
@@ -117,7 +108,7 @@ def filter_log_lines(path: str):
     :rtype: [type]
     """
     with open(path, "r") as instream:
-        while (line := instream.readline()) :
+        while line := instream.readline():
             if (
                 "E3SM" in line
                 and "xml" not in line
@@ -148,8 +139,8 @@ def parse_log_line(line: str) -> LogLine:
         "month": None,
         "requester_ip": attrs[0],
         "path": path,
-        "dataset_id": None,
-        "file_id": None,
+        "dataset_id": "",
+        "file_id": "",
         "access_type": attrs[11],
         "status_code": attrs[8],
         "bytes": attrs[9],
@@ -170,8 +161,8 @@ def parse_log_line(line: str) -> LogLine:
 def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
     """Parse a string timestamp for specific datetime values.
 
-    :param log_row: [description]
-    :type log_row: Dict[str, Any]
+    :param log_line: [description]
+    :type log_line: Dict[str, Any]
     :param raw_timestamp: Raw timestamp from Apache log
     Example: "[15/Jul/2019:03:18:49 -0700]"
     :type raw_timestamp: str
@@ -186,7 +177,7 @@ def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
     return log_line
 
 
-def parse_log_path(log_line, path):
+def parse_log_path(log_line: LogLine, path):
     """Parses the full path for the dataset and file ids and facets.
 
     :param log_line: [description]
@@ -208,7 +199,7 @@ def parse_log_path(log_line, path):
         for option in options:
             if option in dataset_facets:
                 matching_facet = option
-        log_line[facet] = matching_facet
+        log_line[facet] = matching_facet  # type: ignore
 
     return log_line
 
@@ -335,7 +326,7 @@ def plot_report(
     )
 
 
-if __name__ == "__main__":
+def main():
     # Directory that contains the access logs
     logs_path = CONFIG.get("LOGS_PATH")
 
@@ -368,3 +359,7 @@ if __name__ == "__main__":
         facet="activity",
         fiscal_year=20,
     )
+
+
+if __name__ == "__main__":
+    main()
