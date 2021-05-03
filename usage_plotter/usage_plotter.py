@@ -6,7 +6,7 @@ from typing import List, Literal, Optional, TypedDict, Union
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from pandas.core import generic  # noqa
+from dotenv.main import dotenv_values, find_dotenv
 from tqdm import tqdm
 
 # Type annotations
@@ -33,6 +33,9 @@ LogLine = TypedDict(
         "campaign": Optional[str],
     },
 )
+
+# Environment configuration
+CONFIG = dotenv_values(find_dotenv())
 
 # E3SM Facets that are available in file/dataset id and directory format
 AVAILABLE_FACETS = {
@@ -206,7 +209,6 @@ def parse_log_path(log_line, path):
     except ValueError:
         # This usually means an HTTP 302/404 request (incorrect path)
         idx = None
-
     log_line["dataset_id"] = ".".join(path[idx:].split("/")[:-1])
     log_line["file_id"] = path.split("/")[-1]
 
@@ -361,10 +363,13 @@ def group_by_quarter(df: pd.DataFrame) -> pd.DataFrame:
 
 if __name__ == "__main__":
     # Directory that contains the access logs
-    logs_dir = "../access_logs"
+    logs_path = CONFIG.get("LOGS_PATH")
+
+    if logs_path is None or logs_path == "":
+        raise ValueError("LOGS_PATH is not set in .env file!")
 
     # Parse Apache access logs
-    log_lines: List[LogLine] = parse_logs(logs_dir)
+    log_lines: List[LogLine] = parse_logs(logs_path)
 
     # Generate dataframe from parsed log lines
     df = pd.DataFrame(log_lines)

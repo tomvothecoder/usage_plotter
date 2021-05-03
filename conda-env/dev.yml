@@ -9,9 +9,10 @@ dependencies:
   - python=3.8.8
   - pip=21.0.1
   - matplotlib=3.3.4
-  - numpy= 1.19.2
+  - numpy=1.19.2
   - pandas=1.2.4
   - tqdm=4.60.0
+  - python-dotenv=0.17.1
   # Additional
   # ==================
   - bump2version==1.0.1
