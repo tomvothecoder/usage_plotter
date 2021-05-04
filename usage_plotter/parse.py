@@ -76,6 +76,11 @@ def parse_logs(logs_path: str) -> pd.DataFrame:
             parsed_line = parse_log_line(line)
             log_lines.append(parsed_line)
 
+    if not log_lines:
+        raise IndexError(
+            "No log lines were parsed. Check that you set the correct logs path."
+        )
+
     df = pd.DataFrame(log_lines)
     df["date"] = pd.to_datetime(df["date"])
     df["month_year"] = df["date"].dt.to_period("M")

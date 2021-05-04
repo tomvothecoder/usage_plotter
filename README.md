@@ -8,7 +8,10 @@ This software parses ESGF Apache access logs for quarterly metrics specific to E
 
 ## Usage
 
-    python -m usage_plotter.usage_plotter
+Run the software using: `python -m usage_plotter.usage_plotter`.
+Add the flag `-h` or `--help` to view available command line arguments.
+
+## Example Output
 
 ## How It Works
 
