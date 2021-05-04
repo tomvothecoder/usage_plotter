@@ -85,9 +85,9 @@ ipython_config.py
 .python-version
 
 # IDE
-.vscode/
-!.vscode/launch.json
+.vscode/*
 !.vscode/settings.json
+
 .idea/
 
 # pipenv
