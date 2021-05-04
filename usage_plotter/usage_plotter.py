@@ -6,7 +6,12 @@ from usage_plotter.parse import gen_quarterly_report, parse_logs
 from usage_plotter.plot import plot_report
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parses command line arguments to configure the software.
+
+    :return: Command line arguments
+    :rtype: argparse.NameSpace
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--logs_path",
