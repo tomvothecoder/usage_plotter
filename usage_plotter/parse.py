@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import List, Literal, Optional, TypedDict
 
 import pandas as pd
-from dotenv.main import dotenv_values, find_dotenv
 from tqdm import tqdm
 
 from usage_plotter.utils import bytes_to
@@ -34,8 +33,6 @@ LogLine = TypedDict(
     },
 )
 
-# Environment configuration
-CONFIG = dotenv_values(find_dotenv())
 # E3SM Facets that are available in file/dataset id and directory format
 AVAILABLE_FACETS = {
     "realm": ["ocean", "atmos", "land", "sea-ice"],
@@ -198,6 +195,7 @@ def parse_log_path(log_line: LogLine, path):
     except ValueError:
         # This usually means an HTTP 302/404 request (incorrect path)
         idx = None
+
     log_line["dataset_id"] = ".".join(path[idx:].split("/")[:-1])
     log_line["file_id"] = path.split("/")[-1]
 
@@ -212,48 +210,45 @@ def parse_log_path(log_line: LogLine, path):
     return log_line
 
 
-def gen_quarterly_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
-    """Generates the quarterly report for total requests and data accessed.
+def gen_report(
+    df: pd.DataFrame, interval: Literal["month", "quarter"], facet: Optional[str] = None
+) -> pd.DataFrame:
+    """Generates a report for total requests and data accessed over a time interval.
 
-    :param df: DataFrame containing monthly report.
+    :param df: DataFrame containing parsed logs.
     :type df: pd.DataFrame
+    :param interval: Time interval of the report.
+    :type interval: Literal["quarter", "month]
     :param facet: Facet to aggregate and merge on, defaults to None
     :type facet: Optional[str], optional
-    :return: [description]
+    :return: DataFrame containing quaterly or monthly report.
     :rtype: pd.DataFrame
     """
-    agg_cols = ["month_year"]
+    agg_cols = ["month_year", "month", "year"]
     if facet:
         agg_cols.append(facet)
 
     # Total requests on a monthly basis
     df_req_by_mon = df.copy()
-    df_req_by_mon = df_req_by_mon.value_counts(subset=[*agg_cols]).reset_index(
+    df_req_by_mon = df_req_by_mon.value_counts(subset=agg_cols).reset_index(
         name="requests"
     )
-
     # Total data accessed on a monthly basis (only successful requests)
     df_data_by_mon = df.copy()
     df_data_by_mon = df_data_by_mon[df_data_by_mon.status_code.str.contains("200|206")]
     df_data_by_mon = (
-        df_data_by_mon.groupby(by=[*agg_cols, "status_code"])
-        .agg({"mb": "sum"})
-        .reset_index()
+        df_data_by_mon.groupby(by=agg_cols).agg({"mb": "sum"}).reset_index()
     )
     df_data_by_mon["gb"] = df_data_by_mon.mb.div(1024)
 
-    # Total requests and data accessed on a quarterly basis
-    df_req_by_qt = resample_to_quarter(df_req_by_mon, facet)
-    df_data_by_qt = resample_to_quarter(df_data_by_mon, facet)
+    # Monthly report
+    df_mon_report = pd.merge(df_req_by_mon, df_data_by_mon, on=agg_cols)
+    df_mon_report = df_mon_report.sort_values(by=agg_cols)
+    if interval == "month":
+        return df_mon_report
 
-    # Generate final quarterly report
-    merge_cols = ["fy_quarter", "fiscal_year", "quarter", "start_date", "end_date"]
-    if facet:
-        merge_cols.append(facet)
-    df_qt_report = pd.merge(df_data_by_qt, df_req_by_qt, on=merge_cols, how="inner")
-
-    # Reorder columns for printing output
-    df_qt_report = df_qt_report[[*merge_cols, "requests", "gb"]]
+    # Quarterly report
+    df_qt_report = resample_to_quarter(df_mon_report, facet)
     return df_qt_report
 
 
@@ -265,7 +260,7 @@ def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
     :return: DataFrame containing quarterly report.
     :rtype: pd.DataFrame
     """
-    # Set index to month_year in order to resample on quarters
+    # Set index to `month_year` in order to resample on quarters
     df_resample = df.copy().set_index("month_year")
     if facet:
         df_resample = df_resample.groupby(facet)
@@ -273,11 +268,28 @@ def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
     df_qt: pd.DataFrame = (
         df_resample.resample("Q-JUN", convention="end").sum().reset_index()
     )
-    df_qt.rename({"month_year": "fy_quarter"}, axis=1, inplace=True)  # noqa
-    df_qt["fiscal_year"] = df_qt.fy_quarter.dt.strftime("%f")
+    df_qt = df_qt.rename({"month_year": "fy_quarter"}, axis=1)
+
+    # Parse `fy_quarter` column for more granular info to perform additional
+    # aggregation operations.
+    df_qt["fiscal_year"] = df_qt.fy_quarter.dt.strftime("%F")
     df_qt["quarter"] = df_qt.fy_quarter.dt.strftime("%q")
     df_qt["start_date"] = df_qt.apply(
         lambda row: row.fy_quarter.start_time.date(), axis=1
     )
     df_qt["end_date"] = df_qt.apply(lambda row: row.fy_quarter.end_time.date(), axis=1)
+
+    # Reorder columns for a cleaner dataframe output.
+    df_qt = df_qt[
+        [
+            "fy_quarter",
+            "fiscal_year",
+            "quarter",
+            "start_date",
+            "end_date",
+            facet,
+            "requests",
+            "gb",
+        ]
+    ]
     return df_qt

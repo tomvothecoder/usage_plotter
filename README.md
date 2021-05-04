@@ -8,8 +8,15 @@ This software parses ESGF Apache access logs for quarterly metrics specific to E
 
 ## Usage
 
-Run the software using: `python -m usage_plotter.usage_plotter`.
-Add the flag `-h` or `--help` to view available command line arguments.
+1. Install Anaconda
+2. Install and activate Conda environment
+        conda env create -n conda-env/dev.yml`
+        conda activate usage_plotter_dev
+3. Run the software using
+      `python -m usage_plotter.usage_plotter
+4. View plot PNG files in root of repository
+
+Tip: Add the flag `-h` or `--help` to view available command line arguments.
 
 ## Example Output
 
