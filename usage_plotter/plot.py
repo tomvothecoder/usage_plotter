@@ -35,7 +35,16 @@ def plot_report(
     )
 
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(12, 8))
-    base_config = {"kind": "line", "stacked": True, "rot": 0, "legend": False}
+    # https://pandas.pydata.org/pandas-docs/version/0.15.2/generated/pandas.DataFrame.plot.html
+    base_config: pd.DataFrame.plot.__init__ = {
+        "kind": "line",
+        "stacked": True,
+        "legend": False,
+        "style": ".-",
+        "sharex": True,
+        "xticks": (range(1, 13)),
+        "rot": 0,
+    }
 
     pivot_table.requests.plot(
         **base_config,
@@ -44,6 +53,7 @@ def plot_report(
         xlabel="Fiscal Month (July - June)",
         ylabel="Requests",
     )
+
     pivot_table.gb.plot(
         **base_config,
         ax=axes[1],
@@ -52,12 +62,19 @@ def plot_report(
         ylabel="Data Access (GB)",
     )
 
-    labels = df[facet].unique()
+    # Add vertical lines to represent quarters
+    for i in range(len(fig.axes)):
+        axes[i].axvline(x=3, color="blue", linestyle="--", lw=2)
+        axes[i].axvline(x=6, color="blue", linestyle="--", lw=2)
+        axes[i].axvline(x=9, color="blue", linestyle="--", lw=2)
 
-    fig.legend(labels=labels, loc="lower center", ncol=len(labels))
+    # Add legend labels at the bottom to avoid legends overlapping plot values.
+    legend_labels = df[facet].unique()
+    fig.legend(labels=legend_labels, loc="lower center", ncol=len(legend_labels))
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.1)
 
+    # Save figure to file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     fig.savefig(
         f"outputs/{project}_quarterly_report_FY{fiscal_year}_{timestamp}",

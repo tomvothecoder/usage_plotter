@@ -28,7 +28,7 @@ def parse_args(console: bool = False) -> argparse.Namespace:
         "-fy",
         type=str,
         choices=("2019", "2020", "2021"),
-        default="2021",
+        default="2020",
         help="A string for reporting E3SM Infrastructure Group fiscal year(default: 2021).",
         required=False,
     )
