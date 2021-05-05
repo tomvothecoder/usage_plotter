@@ -24,9 +24,9 @@ def plot_report(
     :param filename: Name of the output file
     :type filename: str
     """
-
+    df_fy = df[df.fiscal_yr == fiscal_year]
     pivot_table = pd.pivot_table(
-        df,
+        df_fy,
         index="fiscal_month",
         values=["requests", "gb"],
         columns=facet,
@@ -56,7 +56,7 @@ def plot_report(
     pivot_table.gb.plot(
         **base_config,
         ax=axes[1],
-        title=f"{project} {fiscal_year} Data Access by Month ({facet})",
+        title=f"{project} FY{fiscal_year} Data Access by Month ({facet})",
         xlabel="Fiscal Month (July - June)",
         ylabel="Data Access (GB)",
     )
