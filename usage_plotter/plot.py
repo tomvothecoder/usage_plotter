@@ -24,6 +24,7 @@ def plot_report(
     :param filename: Name of the output file
     :type filename: str
     """
+
     pivot_table = pd.pivot_table(
         df,
         index="fiscal_month",

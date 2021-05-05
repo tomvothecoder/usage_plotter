@@ -235,14 +235,13 @@ def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
     if facet:
         agg_cols.append(facet)
 
+    df_copy = df.copy()
+    df_copy[facet] = df_copy[facet].fillna(value="N/A")
+
     # Total requests on a monthly basis
-    df_req_by_mon = df.copy()
-    df_req_by_mon = df_req_by_mon.value_counts(subset=agg_cols).reset_index(
-        name="requests"
-    )
+    df_req_by_mon = df_copy.value_counts(subset=agg_cols).reset_index(name="requests")
     # Total data accessed on a monthly basis (only successful requests)
-    df_data_by_mon = df.copy()
-    df_data_by_mon = df_data_by_mon[df_data_by_mon.status_code.str.contains("200|206")]
+    df_data_by_mon = df_copy[df_copy.status_code.str.contains("200|206")]
     df_data_by_mon = (
         df_data_by_mon.groupby(by=agg_cols).agg({"mb": "sum"}).reset_index()
     )
@@ -251,6 +250,9 @@ def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
     # Calendar year report
     df_mon_report = pd.merge(df_req_by_mon, df_data_by_mon, on=agg_cols)
     df_mon_report = df_mon_report.sort_values(by=agg_cols)
+
+    # Replace all None values for grouping
+    df_mon_report[facet] = df_mon_report[facet].fillna(f"No {facet}")
 
     # Fiscal year report
     df_fy_report = resample_to_quarter(df_mon_report, facet)
