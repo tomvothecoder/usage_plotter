@@ -15,6 +15,15 @@ def parse_args(console: bool = False) -> argparse.Namespace:
     :rtype: argparse.NameSpace
     """
     parser = argparse.ArgumentParser()
+    # TODO: Generate report for all available fiscal years to avoid rerunning the code.
+    parser.add_argument(
+        "--fiscal_year",
+        "-fy",
+        type=str,
+        choices=("2019", "2020", "2021"),
+        help="A string for reporting E3SM Infrastructure Group fiscal year(default: 2021).",
+        required=True,
+    )
     parser.add_argument(
         "--logs_path",
         "-l",
@@ -24,16 +33,6 @@ def parse_args(console: bool = False) -> argparse.Namespace:
         required=False,
     )
 
-    # TODO: Generate report for all available fiscal years to avoid rerunning the code.
-    parser.add_argument(
-        "--fiscal_year",
-        "-fy",
-        type=str,
-        choices=("2019", "2020", "2021"),
-        default="2020",
-        help="A string for reporting E3SM Infrastructure Group fiscal year(default: 2021).",
-        required=False,
-    )
     if console:
         return parser.parse_args([])
     return parser.parse_args()
