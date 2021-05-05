@@ -275,7 +275,7 @@ def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
 
     # Get equivalent fiscal information from calendar dates
     df_resample["fy_quarter"] = df_resample.apply(
-        lambda row: row.calendar_yr_month.asfreq("Q-JUN", convention="end"), axis=1
+        lambda row: row.calendar_yr_month.asfreq("Q-JUN"), axis=1
     )
     df_resample["fiscal_yr"] = df_resample.fy_quarter.dt.strftime("%F")
     df_resample["fiscal_quarter"] = df_resample.fy_quarter.dt.strftime("%q")

@@ -38,11 +38,11 @@ def main():
     # =============
     parsed_args = parse_args()
     logs_path = parsed_args.logs_path
-    logger.info(f"\nGenerating report with for access logs in `{logs_path}`")
+    logger.info(f"\nGenerating report for access logs in `{logs_path}`\n")
 
     # Initial log parsing
     # ===================
-    logger.info("Parsing access logs...")
+    logger.info("\nParsing access logs...")
     df: pd.DataFrame = parse_logs(logs_path)
 
     # E3SM report
@@ -71,7 +71,7 @@ def main():
         facet="activity",
     )
 
-    logger.info("Completed, check the /outputs directory.")
+    logger.info("\nCompleted, check the /outputs directory.")
 
 
 if __name__ == "__main__":

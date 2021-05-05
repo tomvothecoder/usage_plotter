@@ -40,7 +40,7 @@ def plot_report(
     fiscal_yrs = df.fiscal_yr.unique()
 
     for fiscal_yr in fiscal_yrs:
-        logger.info(f"Generating report and plot for {project_title} FY{fiscal_yr}")
+        logger.info(f"\nGenerating report and plot for {project_title} FY{fiscal_yr}")
         filename = gen_filename(project_title, fiscal_yr)
         df_fy = df[df.fiscal_yr == fiscal_yr]
         df_fy.to_csv(f"{filename}.csv")
