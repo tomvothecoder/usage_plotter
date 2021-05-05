@@ -24,30 +24,14 @@ def parse_args(console: bool = False) -> argparse.Namespace:
         required=False,
     )
     parser.add_argument(
-        "--year",
-        "-y",
+        "--fiscal_year",
+        "-fy",
         type=str,
-        choices=("2019", "2020", "2021", "2022"),
+        choices=("2019", "2020", "2021"),
         default="2021",
-        help="A string for reporting E3SM IG FY (quarter) or CY (month) (default: 2021).",
+        help="A string for reporting E3SM Infrastructure Group fiscal year(default: 2021).",
         required=False,
     )
-    parser.add_argument(
-        "--interval",
-        "-i",
-        type=str,
-        choices=("quarter", "month"),
-        default="quarter",
-        help="The reporting interval (default: quarter).",
-        required=False,
-    )
-    parser.add_argument(
-        "--debug",
-        "-d",
-        help="Add this argument for a debug run, which does not save output plots and csvs.",
-        action="store_true",
-    )
-
     if console:
         return parser.parse_args([])
     return parser.parse_args()
@@ -58,15 +42,11 @@ def main():
     # =============
     parsed_args = parse_args()
     logs_path = parsed_args.logs_path
-    year = parsed_args.year
-    interval = parsed_args.interval
-    debug = parsed_args.debug
+    fiscal_year = parsed_args.fiscal_year
 
     print("\nGenerating report with the following config:")
     print(f"- Logs Path: {logs_path}")
-    print(f"- Year: {year}")
-    print(f"- Interval: {interval}")
-    print(f"- Debug: {debug}")
+    print(f"- Fiscal Year: {fiscal_year}")
     print("\n")
 
     # Initial log parsing
@@ -78,28 +58,32 @@ def main():
     df_e3sm = df[df.project == "E3SM"]
 
     # By time frequency
-    df_e3sm_tf = gen_report(df_e3sm, interval=interval, facet="time_frequency")
+    df_e3sm_tf = gen_report(df_e3sm, facet="time_frequency")
     plot_report(
         df_e3sm_tf,
         project="E3SM",
-        year=year,
-        interval=interval,
+        fiscal_year=fiscal_year,
         facet="time_frequency",
     )
+    # df_e3sm_tf.to_csv(
+    #     f"outputs/E3SM_{interval}ly_report_{year_title}_{timestamp}",
+    # )
 
     # E3SM in CMIP6 report
     # ====================
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     df_e3sm_cmip6 = df[df.project == "E3SM in CMIP6"]
 
     # By activity
-    df_e3sm_cmip6_activity = gen_report(
-        df_e3sm_cmip6, interval=interval, facet="activity"
-    )
+    df_e3sm_cmip6_activity = gen_report(df_e3sm_cmip6, facet="activity")
+    # df_e3sm_cmip6_activity.to_csv(
+    #     f"outputs/E3SM in CMIP6_{interval}ly_report_{year_title}_{timestamp}",
+    # )
+
     plot_report(
         df_e3sm_cmip6_activity,
         project="E3SM in CMIP6",
-        year=year,
-        interval=interval,
+        fiscal_year=fiscal_year,
         facet="activity",
     )
 

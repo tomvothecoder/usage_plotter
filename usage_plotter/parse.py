@@ -15,8 +15,8 @@ LogLine = TypedDict(
     {
         "log_line": str,
         "date": pd.Timestamp,
-        "year": Optional[int],
-        "month": Optional[int],
+        "calendar_yr": Optional[int],
+        "calendar_month": Optional[int],
         "requester_ip": str,
         "path": str,
         "dataset_id": str,
@@ -80,7 +80,7 @@ def parse_logs(logs_path: str) -> pd.DataFrame:
 
     df = pd.DataFrame(log_lines)
     df["date"] = pd.to_datetime(df["date"])
-    df["month_year"] = df["date"].dt.to_period("M")
+    df["calendar_yr_month"] = df["date"].dt.to_period("M")
 
     return df
 
@@ -140,8 +140,8 @@ def parse_log_line(line: str) -> LogLine:
     parsed_line: LogLine = {
         "log_line": line,
         "date": None,
-        "year": None,
-        "month": None,
+        "calendar_yr": None,
+        "calendar_month": None,
         "requester_ip": attrs[0],
         "path": path,
         "dataset_id": "",
@@ -177,8 +177,9 @@ def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
     timestamp = raw_timestamp[raw_timestamp.find("[") + 1 : raw_timestamp.find(":")]
 
     log_line["date"] = datetime.strptime(timestamp, "%d/%b/%Y").date()
-    log_line["year"] = log_line["date"].year
-    log_line["month"] = log_line["date"].month
+    log_line["calendar_yr"] = log_line["date"].year
+    log_line["calendar_month"] = log_line["date"].month
+
     return log_line
 
 
@@ -210,21 +211,18 @@ def parse_log_path(log_line: LogLine, path):
     return log_line
 
 
-def gen_report(
-    df: pd.DataFrame, interval: Literal["month", "quarter"], facet: Optional[str] = None
-) -> pd.DataFrame:
-    """Generates a report for total requests and data accessed over a time interval.
+def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
+    """Generates a report for total requests and data accessed.
 
     :param df: DataFrame containing parsed logs.
     :type df: pd.DataFrame
-    :param interval: Time interval of the report.
-    :type interval: Literal["quarter", "month]
+
     :param facet: Facet to aggregate and merge on, defaults to None
     :type facet: Optional[str], optional
     :return: DataFrame containing quaterly or monthly report.
     :rtype: pd.DataFrame
     """
-    agg_cols = ["month_year", "month", "year"]
+    agg_cols = ["calendar_yr_month", "calendar_yr", "calendar_month"]
     if facet:
         agg_cols.append(facet)
 
@@ -244,8 +242,6 @@ def gen_report(
     # Monthly report
     df_mon_report = pd.merge(df_req_by_mon, df_data_by_mon, on=agg_cols)
     df_mon_report = df_mon_report.sort_values(by=agg_cols)
-    if interval == "month":
-        return df_mon_report
 
     # Quarterly report
     df_qt_report = resample_to_quarter(df_mon_report, facet)
@@ -260,36 +256,64 @@ def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
     :return: DataFrame containing quarterly report.
     :rtype: pd.DataFrame
     """
-    # Set index to `month_year` in order to resample on quarters
-    df_resample = df.copy().set_index("month_year")
-    if facet:
-        df_resample = df_resample.groupby(facet)
+    df_resample = df.copy()
 
+    # Get equivalent fiscal information from calendar dates
+    df_resample["fy_quarter"] = df_resample.apply(
+        lambda row: row.calendar_yr_month.asfreq("Q-JUN"), axis=1
+    )
+    df_resample["fiscal_yr"] = df_resample.fy_quarter.dt.strftime("%F")
+    df_resample["fiscal_quarter"] = df_resample.fy_quarter.dt.strftime("%q")
+    df_resample["fiscal_month"] = df_resample.apply(
+        lambda row: convert_to_fiscal_month(row.calendar_month), axis=1
+    )
+
+    agg_cols = [
+        "calendar_yr",
+        "calendar_month",
+        "fiscal_yr",
+        "fiscal_quarter",
+        "fiscal_month",
+        facet,
+    ]
     df_qt: pd.DataFrame = (
-        df_resample.resample("Q-JUN", convention="end").sum().reset_index()
+        df_resample.groupby(by=agg_cols)
+        .agg({"requests": "sum", "gb": "sum"})
+        .reset_index()
     )
-    df_qt = df_qt.rename({"month_year": "fy_quarter"}, axis=1)
-
-    # Parse `fy_quarter` column for more granular info to perform additional
-    # aggregation operations.
-    df_qt["fiscal_year"] = df_qt.fy_quarter.dt.strftime("%F")
-    df_qt["quarter"] = df_qt.fy_quarter.dt.strftime("%q")
-    df_qt["start_date"] = df_qt.apply(
-        lambda row: row.fy_quarter.start_time.date(), axis=1
-    )
-    df_qt["end_date"] = df_qt.apply(lambda row: row.fy_quarter.end_time.date(), axis=1)
-
     # Reorder columns for a cleaner dataframe output.
     df_qt = df_qt[
         [
-            "fy_quarter",
-            "fiscal_year",
-            "quarter",
-            "start_date",
-            "end_date",
-            facet,
+            *agg_cols,
             "requests",
             "gb",
         ]
     ]
+
     return df_qt
+
+
+def convert_to_fiscal_month(month: int):
+    """Converts a calendar month to the E3SM fiscal month equivalent.
+
+    :param month: [description]
+    :type month: int
+    :return: [description]
+    :rtype: [type]
+    """
+
+    map_calendar_to_fiscal = {
+        7: 1,
+        8: 2,
+        9: 3,
+        10: 4,
+        11: 5,
+        12: 6,
+        1: 7,
+        2: 8,
+        3: 9,
+        4: 10,
+        5: 11,
+        6: 12,
+    }
+    return map_calendar_to_fiscal[month]

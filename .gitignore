@@ -137,4 +137,5 @@ dmypy.json
 # Input and output
 access_logs/
 qa/
-**/*.png
+outputs/*
+!outputs/README.md
