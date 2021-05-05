@@ -49,6 +49,7 @@ def main():
     # ===========
     e3sm_title: ProjectTitle = "E3SM"
     df_e3sm = df[df.project == e3sm_title]
+    df_e3sm.to_csv("test.csv")
 
     # By time frequency
     df_e3sm_tf = gen_report(df_e3sm, facet="time_frequency")

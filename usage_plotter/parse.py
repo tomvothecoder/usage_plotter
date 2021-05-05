@@ -103,7 +103,6 @@ def fetch_logs(path: str) -> List[str]:
             "No logs were found. Check that you set the correct logs path."
         )
     logs_paths.sort()
-    print(logs_paths)
     return logs_paths
 
 
