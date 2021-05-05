@@ -2,6 +2,7 @@ import argparse
 
 import pandas as pd
 
+from usage_plotter import log
 from usage_plotter.parse import FiscalYear, ProjectTitle, gen_report, parse_logs
 from usage_plotter.plot import plot_report
 
@@ -57,23 +58,25 @@ def gen_filename(project: ProjectTitle, fiscal_year: FiscalYear) -> str:
 
 
 def main():
+    logger = log.setup_custom_logger("root")
+
     # Configuration
     # =============
     parsed_args = parse_args()
     logs_path = parsed_args.logs_path
     fiscal_year = parsed_args.fiscal_year
-
-    print("\nGenerating report with the following config:")
-    print(f"- Logs Path: {logs_path}")
-    print(f"- Fiscal Year: {fiscal_year}")
-    print("\n")
+    logger.info(
+        f"\nGenerating report with the following config:\n- Logs Path: {logs_path}\n- Fiscal Year: {fiscal_year}\n"
+    )
 
     # Initial log parsing
     # ===================
+    logger.info("Parsing access logs...")
     df: pd.DataFrame = parse_logs(logs_path)
 
     # E3SM report
     # ===========
+    logger.info(f"Generating FY{fiscal_year} CSV report and plots...")
     e3sm_title: ProjectTitle = "E3SM"
     e3sm_filename = gen_filename(e3sm_title, fiscal_year)
     df_e3sm = df[df.project == "E3SM"]
@@ -106,9 +109,7 @@ def main():
         filename=e3sm_cmip6_filename,
     )
 
-    print(
-        f"FY{fiscal_year} CSV reports and plots generated. Check the /outputs directory."
-    )
+    logger.info("Completed, check the /outputs directory.")
 
 
 if __name__ == "__main__":
