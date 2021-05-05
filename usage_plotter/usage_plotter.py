@@ -47,7 +47,6 @@ def main():
 
     # E3SM report
     # ===========
-    logger.info("Generating CSV report and plots...")
     e3sm_title: ProjectTitle = "E3SM"
     df_e3sm = df[df.project == e3sm_title]
 
