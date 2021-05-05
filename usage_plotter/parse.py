@@ -10,7 +10,6 @@ from usage_plotter.utils import bytes_to
 
 # Type annotations
 ProjectTitle = Literal["E3SM", "E3SM in CMIP6"]
-FiscalYear = Literal["2019", "2020", "2021"]
 LogLine = TypedDict(
     "LogLine",
     {
