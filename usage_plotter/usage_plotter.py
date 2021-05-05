@@ -2,7 +2,7 @@ import argparse
 
 import pandas as pd
 
-from usage_plotter.parse import gen_report, parse_logs
+from usage_plotter.parse import FiscalYear, ProjectTitle, gen_report, parse_logs
 from usage_plotter.plot import plot_report
 
 
@@ -23,6 +23,8 @@ def parse_args(console: bool = False) -> argparse.Namespace:
         help="The string path to the ESGF Apache access logs (default: access_logs).",
         required=False,
     )
+
+    # TODO: Generate report for all available fiscal years to avoid rerunning the code.
     parser.add_argument(
         "--fiscal_year",
         "-fy",
@@ -35,6 +37,24 @@ def parse_args(console: bool = False) -> argparse.Namespace:
     if console:
         return parser.parse_args([])
     return parser.parse_args()
+
+
+def gen_filename(project: ProjectTitle, fiscal_year: FiscalYear) -> str:
+    """Generates the filename for output files (e.g., .csv and .png).
+
+    :param project: [description]
+    :type project: ProjectTitle
+    :param fiscal_year: [description]
+    :type fiscal_year: FiscalYear
+    :return: [description]
+    :rtype: str
+    """
+    output_dir = "outputs"
+    filename = (
+        f"{output_dir}/{project.replace(' ', '_')}_quarterly_report_FY{fiscal_year}"
+    )
+
+    return filename
 
 
 def main():
@@ -55,36 +75,36 @@ def main():
 
     # E3SM report
     # ===========
+    e3sm_title: ProjectTitle = "E3SM"
+    e3sm_filename = gen_filename(e3sm_title, fiscal_year)
     df_e3sm = df[df.project == "E3SM"]
 
     # By time frequency
     df_e3sm_tf = gen_report(df_e3sm, facet="time_frequency")
+    df_e3sm_tf.to_csv(f"{e3sm_filename}.csv")
     plot_report(
         df_e3sm_tf,
         project="E3SM",
         fiscal_year=fiscal_year,
         facet="time_frequency",
+        filename=e3sm_filename,
     )
-    # df_e3sm_tf.to_csv(
-    #     f"outputs/E3SM_{interval}ly_report_{year_title}_{timestamp}",
-    # )
 
     # E3SM in CMIP6 report
     # ====================
-    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    e3sm_cmip6_title: ProjectTitle = "E3SM in CMIP6"
+    e3sm_cmip6_filename = gen_filename(e3sm_cmip6_title, fiscal_year)
     df_e3sm_cmip6 = df[df.project == "E3SM in CMIP6"]
 
     # By activity
     df_e3sm_cmip6_activity = gen_report(df_e3sm_cmip6, facet="activity")
-    # df_e3sm_cmip6_activity.to_csv(
-    #     f"outputs/E3SM in CMIP6_{interval}ly_report_{year_title}_{timestamp}",
-    # )
-
+    df_e3sm_cmip6_activity.to_csv(f"{e3sm_cmip6_filename}.csv")
     plot_report(
         df_e3sm_cmip6_activity,
-        project="E3SM in CMIP6",
+        project=e3sm_cmip6_title,
         fiscal_year=fiscal_year,
         facet="activity",
+        filename=e3sm_cmip6_filename,
     )
 
 

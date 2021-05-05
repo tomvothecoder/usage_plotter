@@ -1,17 +1,15 @@
-from datetime import datetime
-from typing import Literal
-
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from usage_plotter.parse import Project
+from usage_plotter.parse import FiscalYear, ProjectTitle
 
 
 def plot_report(
     df: pd.DataFrame,
-    project: Project,
-    fiscal_year: Literal["2019", "2020", "2021"],
+    project: ProjectTitle,
+    fiscal_year: FiscalYear,
     facet: str,
+    filename: str,
 ):
     """Generates a plot consisting of stacked bar subplots.
 
@@ -20,7 +18,7 @@ def plot_report(
     :param project: Name of the project for the subplot titles
     :type project: Project
     :param fiscal_year: Year of the report, FY for quarterly and CY for monthly.
-    :type fiscal_year: Literal["2019", "2020", "2021"]
+    :type fiscal_year: FiscalYear
     :param interval: Time interval of the report.
     :type interval: Literal["quarter", "month]
     :param facet: Facet to stack dbars on.
@@ -74,10 +72,5 @@ def plot_report(
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.1)
 
-    # Save figure to file
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    fig.savefig(
-        f"outputs/{project}_quarterly_report_FY{fiscal_year}_{timestamp}",
-        dpi=fig.dpi,
-        facecolor="w",
-    )
+    # Save figure to file for analysis
+    fig.savefig(filename, dpi=fig.dpi, facecolor="w")

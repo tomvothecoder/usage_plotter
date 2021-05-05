@@ -9,7 +9,8 @@ from tqdm import tqdm
 from usage_plotter.utils import bytes_to
 
 # Type annotations
-Project = Literal["E3SM", "E3SM in CMIP6"]
+ProjectTitle = Literal["E3SM", "E3SM in CMIP6"]
+FiscalYear = Literal["2019", "2020", "2021"]
 LogLine = TypedDict(
     "LogLine",
     {
@@ -25,7 +26,7 @@ LogLine = TypedDict(
         "status_code": str,
         "bytes": str,
         "mb": float,
-        "project": Project,
+        "project": ProjectTitle,
         "realm": Optional[str],
         "data_type": Optional[str],
         "science_driver": Optional[str],
