@@ -11,18 +11,18 @@ def plot_report(
     facet: str,
     filename: str,
 ):
-    """Generates a plot consisting of stacked bar subplots.
+    """Generates a figure of subplots consisting of stacked (by facet) line plots.
 
-    :param df: DataFrame containing report over a time interval.
+    :param df: DataFrame containing monthly report
     :type df: pd.DataFrame
     :param project: Name of the project for the subplot titles
     :type project: Project
-    :param fiscal_year: Year of the report, FY for quarterly and CY for monthly.
+    :param fiscal_year: Fiscal year of the report
     :type fiscal_year: FiscalYear
-    :param interval: Time interval of the report.
-    :type interval: Literal["quarter", "month]
-    :param facet: Facet to stack dbars on.
+    :param facet: Facet to stack line charts on
     :type facet: str
+    :param filename: Name of the output file
+    :type filename: str
     """
     pivot_table = pd.pivot_table(
         df,

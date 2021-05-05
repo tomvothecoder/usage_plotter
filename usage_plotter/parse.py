@@ -60,58 +60,59 @@ AVAILABLE_FACETS = {
 }
 
 
-def parse_logs(logs_path: str) -> pd.DataFrame:
-    """Main parsing function, parses Apache logs into a DataFrame.
+def parse_logs(path: str) -> pd.DataFrame:
+    """Parses Apache logs to extract information into a DataFrame.
 
-    :param logs_path: Path to access logs, configured using .env file
-    :type logs_path: str
-    :return: DataFrame containing parsed
+    :param path: Path to access logs
+    :type path: str
+    :return: DataFrame containing parsed logs
     :rtype: pd.DataFrame
     """
-    log_lines: List[LogLine] = []
-    for log in tqdm(get_logs(logs_path)):
+    logs_paths = fetch_logs(path)
+    parsed_lines: List[LogLine] = []
+    for log in tqdm(logs_paths):
         for line in filter_log_lines(log):
             parsed_line = parse_log_line(line)
-            log_lines.append(parsed_line)
+            parsed_lines.append(parsed_line)
 
-    if not log_lines:
+    if not parsed_lines:
         raise IndexError(
             "No log lines were parsed. Check that you set the correct logs path."
         )
 
-    df = pd.DataFrame(log_lines)
+    df = pd.DataFrame(parsed_lines)
     df["date"] = pd.to_datetime(df["date"])
     df["calendar_yr_month"] = df["date"].dt.to_period("M")
 
     return df
 
 
-def get_logs(path: str):
-    """Fetch Apache logs from a path using a generator.
+def fetch_logs(path: str) -> List[str]:
+    """Fetches Apache logs from a path.
 
-    :param path: [description]
+    :param path: Path to access logs
     :type path: str
-    :yield: [description]
-    :rtype: [type]
+    :yield: List of absolute path to access logs
+    :rtype: List[str]
     """
+    logs_paths: List[str] = []
     for root, dirs, files in os.walk(path):
         if not files:
             continue
         if dirs:
             continue
         for file in files:
-            yield str(Path(root, file).absolute())
+            logs_paths.append(str(Path(root, file).absolute()))
+    return logs_paths
 
 
 def filter_log_lines(path: str):
     """Filter log lines using a generator.
 
-    Refer to README.md for the typical directory and dataset id structures.
-
-    :param path: [description]
+    :param path: Path to access logs
     :type path: str
-    :yield: [description]
-    :rtype: [type]
+    :yield: A line from a log file
+    :rtype: str
     """
     with open(path, "r") as instream:
         while line := instream.readline():
@@ -129,6 +130,8 @@ def filter_log_lines(path: str):
 
 def parse_log_line(line: str) -> LogLine:
     """Parse raw log line to extract HTTP request info.
+
+    Refer to README.md for directory and dataset id templates.
 
     :param line: Raw log line from Apache log
     :type line: str
@@ -165,15 +168,16 @@ def parse_log_line(line: str) -> LogLine:
 
 
 def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
-    """Parse a string timestamp for specific datetime values.
+    """Parses a string timestamp for datetime values.
 
-    :param log_line: [description]
+    Example timestamp: "[15/Jul/2019:03:18:49 -0700]"
+
+    :param log_line: Parsed log line
     :type log_line: Dict[str, Any]
-    :param raw_timestamp: Raw timestamp from Apache log
-    Example: "[15/Jul/2019:03:18:49 -0700]"
+    :param raw_timestamp: Raw timestamp from log line
     :type raw_timestamp: str
-    :return: [description]
-    :rtype: Dict[str, Any]
+    :return: Parsed log line with datetime values
+    :rtype: LogLine
     """
     timestamp = raw_timestamp[raw_timestamp.find("[") + 1 : raw_timestamp.find(":")]
 
@@ -184,24 +188,26 @@ def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
     return log_line
 
 
-def parse_log_path(log_line: LogLine, path):
-    """Parses the full path for the dataset and file ids and facets.
+def parse_log_path(log_line: LogLine, path_in_log_line: str) -> LogLine:
+    """Parses the path in the log line for the dataset id, file id, and facets.
 
-    :param log_line: [description]
-    :type log_line: [type]
-    :return: [description]
-    :rtype: [type]
+    :param log_line: Parsed log line
+    :type log_line: LogLine
+    :param path_in_log_path: The path of the dataset/file transferred in the request
+    :type path_in_log_path: str
+    :return: Parsed log line with dataset id, file id, and facets
+    :rtype: LogLine
     """
     try:
-        idx = path.index("user_pub_work") + len("user_pub_work") + 1
+        idx = path_in_log_line.index("user_pub_work") + len("user_pub_work") + 1
     except ValueError:
         # This usually means an HTTP 302/404 request (incorrect path)
-        idx = None
+        idx = None  # type: ignore
 
-    log_line["dataset_id"] = ".".join(path[idx:].split("/")[:-1])
-    log_line["file_id"] = path.split("/")[-1]
-
+    log_line["dataset_id"] = ".".join(path_in_log_line[idx:].split("/")[:-1])
+    log_line["file_id"] = path_in_log_line.split("/")[-1]
     dataset_facets = log_line["dataset_id"].split(".")
+
     for facet, options in AVAILABLE_FACETS.items():
         matching_facet = None
         for option in options:
@@ -213,14 +219,16 @@ def parse_log_path(log_line: LogLine, path):
 
 
 def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
-    """Generates a report for total requests and data accessed.
+    """Generates a report for total requests and data accessed on a monthly basis.
 
-    :param df: DataFrame containing parsed logs.
+    It calculates the equivalent fiscal month based on the fiscal year using the
+    calendar month.
+
+    :param df: DataFrame containing parsed logs
     :type df: pd.DataFrame
-
     :param facet: Facet to aggregate and merge on, defaults to None
     :type facet: Optional[str], optional
-    :return: DataFrame containing quaterly or monthly report.
+    :return: DataFrame containing fiscal year monthly report
     :rtype: pd.DataFrame
     """
     agg_cols = ["calendar_yr_month", "calendar_yr", "calendar_month"]
@@ -240,21 +248,25 @@ def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
     )
     df_data_by_mon["gb"] = df_data_by_mon.mb.div(1024)
 
-    # Monthly report
+    # Calendar year report
     df_mon_report = pd.merge(df_req_by_mon, df_data_by_mon, on=agg_cols)
     df_mon_report = df_mon_report.sort_values(by=agg_cols)
 
-    # Quarterly report
-    df_qt_report = resample_to_quarter(df_mon_report, facet)
-    return df_qt_report
+    # Fiscal year report
+    df_fy_report = resample_to_quarter(df_mon_report, facet)
+    return df_fy_report
 
 
 def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
-    """Resamples a DataFrame from monthly to quarterly.
+    """
+    Resamples a DataFrame to calculate the fiscal year, quarter, and month
+    using the calendar year and month.
 
-    :param df: DataFrame containing monthly report.
+    :param df: DataFrame containing monthly report
     :type df: pd.DataFrame
-    :return: DataFrame containing quarterly report.
+    :param facet: Facet to aggregate on
+    :type facet: Optional[str], optional
+    :return: DataFrame containing monthly report for fiscal year
     :rtype: pd.DataFrame
     """
     df_resample = df.copy()
@@ -270,11 +282,11 @@ def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
     )
 
     agg_cols = [
-        "calendar_yr",
-        "calendar_month",
         "fiscal_yr",
         "fiscal_quarter",
         "fiscal_month",
+        "calendar_yr",
+        "calendar_month",
         facet,
     ]
     df_qt: pd.DataFrame = (
@@ -294,15 +306,16 @@ def resample_to_quarter(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
     return df_qt
 
 
-def convert_to_fiscal_month(month: int):
+def convert_to_fiscal_month(calendar_month: int) -> int:
     """Converts a calendar month to the E3SM fiscal month equivalent.
 
-    :param month: [description]
-    :type month: int
-    :return: [description]
-    :rtype: [type]
-    """
+    NOTE: E3SM IG FY is from July-Jun
 
+    :param month: Calendar month
+    :type month: int
+    :return: Fiscal month
+    :rtype: int
+    """
     map_calendar_to_fiscal = {
         7: 1,
         8: 2,
@@ -317,4 +330,4 @@ def convert_to_fiscal_month(month: int):
         5: 11,
         6: 12,
     }
-    return map_calendar_to_fiscal[month]
+    return map_calendar_to_fiscal[calendar_month]

@@ -106,6 +106,10 @@ def main():
         filename=e3sm_cmip6_filename,
     )
 
+    print(
+        f"FY{fiscal_year} CSV reports and plots generated. Check the /outputs directory."
+    )
+
 
 if __name__ == "__main__":
     main()
