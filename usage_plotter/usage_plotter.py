@@ -47,26 +47,22 @@ def main():
     e3sm_title: ProjectTitle = "E3SM"
     df_e3sm = df[df.project == e3sm_title]
 
-    # By time frequency
-    df_e3sm_tf = gen_report(df_e3sm, facet="time_frequency")
-    plot_report(
-        df_e3sm_tf,
-        project_title=e3sm_title,
-        facet="time_frequency",
-    )
+    # Check dataset template for available facets
+    report_e3sm_facets = ["time_frequency"]
+    for facet in report_e3sm_facets:
+        df_e3sm_by_facet = gen_report(df_e3sm, facet=facet)
+        plot_report(df_e3sm_by_facet, project_title=e3sm_title, facet=facet)
 
     # E3SM in CMIP6 report
     # ====================
     e3sm_cmip6_title: ProjectTitle = "E3SM in CMIP6"
     df_e3sm_cmip6 = df[df.project == e3sm_cmip6_title]
 
-    # By activity
-    df_e3sm_cmip6_activity = gen_report(df_e3sm_cmip6, facet="activity")
-    plot_report(
-        df_e3sm_cmip6_activity,
-        project_title=e3sm_cmip6_title,
-        facet="activity",
-    )
+    # Check dataset template for available facets
+    report_cmip6_facets = ["activity"]
+    for facet in report_cmip6_facets:
+        df_cmip6_by_facet = gen_report(df_e3sm_cmip6, facet=facet)
+        plot_report(df_cmip6_by_facet, project_title=e3sm_title, facet=facet)
 
     logger.info("\nCompleted, check the /outputs directory.")
 

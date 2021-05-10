@@ -69,7 +69,7 @@ def plot_report(
         ax = modify_xtick_labels(fig, ax, int(fiscal_yr))
 
         # Save outputs for analysis
-        filename = gen_filename(project_title, fiscal_yr)
+        filename = gen_filename(project_title, fiscal_yr, facet)
         df_fy.to_csv(f"{filename}.csv")
         fig.savefig(filename, dpi=fig.dpi, facecolor="w")
 
@@ -97,7 +97,7 @@ def modify_xtick_labels(fig: "Figure", ax: "Axes", fiscal_yr: int) -> "Figure":
     For example, for FY 2021, the first and last xtick labels are 07/2020 and
     06/2021 respectively.
 
-    It also adds a vertical line and text that separates each quarter.
+    It also adds a vertical line to separate each quarter.
 
     :param fig: Figure object
     :type fig: [Figure]
@@ -112,21 +112,11 @@ def modify_xtick_labels(fig: "Figure", ax: "Axes", fiscal_yr: int) -> "Figure":
 
     for i in range(len(fig.axes)):
         ax[i].set_xticklabels(xticklabels)
-        quarter = 1
         for tick in range(1, 13):
             end_of_quarter = tick % 3 == 0
             if end_of_quarter:
                 ax[i].axvline(x=tick, color="gray", linestyle="--", lw=2)
-                ax[i].text(
-                    tick,
-                    0,
-                    f"Q{quarter}",
-                    rotation=90,
-                    fontstyle="oblique",
-                    horizontalalignment="right",
-                    verticalalignment="center",
-                )
-                quarter += 1
+
     return fig
 
 
@@ -156,7 +146,7 @@ def gen_xticklabels(fiscal_yr: int) -> List[str]:
     return labels
 
 
-def gen_filename(project_title: ProjectTitle, fiscal_yr: int) -> str:
+def gen_filename(project_title: ProjectTitle, fiscal_yr: int, facet: str) -> str:
     """Generates the filename for output files (e.g., .csv and .png).
 
     :param project_title: The title of the project
@@ -167,8 +157,6 @@ def gen_filename(project_title: ProjectTitle, fiscal_yr: int) -> str:
     :rtype: str
     """
     output_dir = "outputs"
-    filename = (
-        f"{output_dir}/FY{fiscal_yr}_{project_title.replace(' ', '_')}_quarterly_report"
-    )
+    filename = f"{output_dir}/FY{fiscal_yr}_{project_title.replace(' ', '_')}_by_{facet}_quarterly_report"
 
     return filename

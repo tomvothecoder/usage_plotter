@@ -274,6 +274,7 @@ def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
     # Replace all facet None values for grouping
     df_cy_report[facet] = df_cy_report[facet].fillna(f"No {facet}")
 
+    # Final report with fiscal information
     df_cy_fy_report = calendar_to_fiscal(df_cy_report, facet)
     return df_cy_fy_report
 
