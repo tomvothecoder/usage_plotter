@@ -16,7 +16,7 @@ LogLine = TypedDict(
         "log_line": str,
         "date": pd.Timestamp,
         "calendar_yr": Optional[int],
-        "calendar_month": Optional[int],
+        "calendar_mon": Optional[int],
         "requester_ip": str,
         "path": str,
         "dataset_id": str,
@@ -58,6 +58,22 @@ AVAILABLE_FACETS = {
     "campaign": ["BGC-v1", "Cryosphere-v1", "DECK-v1", "HighResMIP-v1"],
 }
 
+# Maps calendar month to fiscal month based on E3SM fiscal year
+E3SM_CY_TO_FY_MAP = {
+    7: 1,
+    8: 2,
+    9: 3,
+    10: 4,
+    11: 5,
+    12: 6,
+    1: 7,
+    2: 8,
+    3: 9,
+    4: 10,
+    5: 11,
+    6: 12,
+}
+
 
 def parse_logs(path: str) -> pd.DataFrame:
     """Parses Apache logs to extract information into a DataFrame.
@@ -69,6 +85,7 @@ def parse_logs(path: str) -> pd.DataFrame:
     """
     logs_paths = fetch_logs(path)
     parsed_lines: List[LogLine] = []
+
     for log in tqdm(logs_paths):
         for line in filter_log_lines(log):
             parsed_line = parse_log_line(line)
@@ -76,7 +93,7 @@ def parse_logs(path: str) -> pd.DataFrame:
 
     df = pd.DataFrame(parsed_lines)
     df["date"] = pd.to_datetime(df["date"])
-    df["calendar_yr_month"] = df["date"].dt.to_period("M")
+    df["calendar_yr_mon"] = df["date"].dt.to_period("M")
 
     return df
 
@@ -145,7 +162,7 @@ def parse_log_line(line: str) -> LogLine:
         "log_line": line,
         "date": None,
         "calendar_yr": None,
-        "calendar_month": None,
+        "calendar_mon": None,
         "requester_ip": attrs[0],
         "path": path,
         "dataset_id": "",
@@ -183,7 +200,7 @@ def parse_log_timestamp(log_line: LogLine, raw_timestamp: str) -> LogLine:
 
     log_line["date"] = datetime.strptime(timestamp, "%d/%b/%Y").date()
     log_line["calendar_yr"] = log_line["date"].year
-    log_line["calendar_month"] = log_line["date"].month
+    log_line["calendar_mon"] = log_line["date"].month
 
     return log_line
 
@@ -235,7 +252,7 @@ def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
     :return: DataFrame containing fiscal year monthly report
     :rtype: pd.DataFrame
     """
-    agg_cols = ["calendar_yr_month", "calendar_yr", "calendar_month"]
+    agg_cols = ["calendar_yr_mon", "calendar_yr", "calendar_mon"]
     if facet:
         agg_cols.append(facet)
 
@@ -277,20 +294,21 @@ def calendar_to_fiscal(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
 
     # Get equivalent fiscal information from calendar dates
     df_resample["fy_quarter"] = df_resample.apply(
-        lambda row: row.calendar_yr_month.asfreq("Q-JUN"), axis=1
+        lambda row: row.calendar_yr_mon.asfreq("Q-JUN"), axis=1
     )
     df_resample["fiscal_yr"] = df_resample.fy_quarter.dt.strftime("%F")
-    df_resample["fiscal_quarter"] = df_resample.fy_quarter.dt.strftime("%q")
-    df_resample["fiscal_month"] = df_resample.apply(
-        lambda row: convert_to_fiscal_month(row.calendar_month), axis=1
+    df_resample["fiscal_mon"] = df_resample.apply(
+        lambda row: E3SM_CY_TO_FY_MAP[row.calendar_mon], axis=1
     )
-
+    df_resample["fiscal_quarter"] = df_resample.fy_quarter.dt.strftime("%q")
     agg_cols = [
+        "fy_quarter",
         "fiscal_yr",
         "fiscal_quarter",
-        "fiscal_month",
+        "fiscal_mon",
         "calendar_yr",
-        "calendar_month",
+        "calendar_mon",
+        "calendar_yr_mon",
     ]
     if facet:
         agg_cols.append(facet)
@@ -304,30 +322,3 @@ def calendar_to_fiscal(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
     df_qt = df_qt[[*agg_cols, "requests", "gb"]]
 
     return df_qt
-
-
-def convert_to_fiscal_month(calendar_month: int) -> int:
-    """Converts a calendar month to the E3SM fiscal month equivalent.
-
-    NOTE: E3SM IG FY is from July-Jun
-
-    :param month: Calendar month
-    :type month: int
-    :return: Fiscal month
-    :rtype: int
-    """
-    month_map = {
-        7: 1,
-        8: 2,
-        9: 3,
-        10: 4,
-        11: 5,
-        12: 6,
-        1: 7,
-        2: 8,
-        3: 9,
-        4: 10,
-        5: 11,
-        6: 12,
-    }
-    return month_map[calendar_month]

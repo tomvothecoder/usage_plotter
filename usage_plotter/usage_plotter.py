@@ -16,8 +16,6 @@ def parse_args(console: bool = False) -> argparse.Namespace:
     :rtype: argparse.NameSpace
     """
     parser = argparse.ArgumentParser()
-    # TODO: Generate report for all available fiscal years to avoid rerunning the code.
-
     parser.add_argument(
         "--logs_path",
         "-l",
@@ -33,7 +31,6 @@ def parse_args(console: bool = False) -> argparse.Namespace:
 
 
 def main():
-
     # Configuration
     # =============
     parsed_args = parse_args()
