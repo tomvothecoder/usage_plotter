@@ -4,7 +4,7 @@ import pandas as pd
 
 from usage_plotter.log import logger
 from usage_plotter.parse import ProjectTitle, gen_report, parse_logs
-from usage_plotter.plot import plot_report
+from usage_plotter.plot import plot_by_facet, plot_cumulative_sum
 
 
 def parse_args(console: bool = False) -> argparse.Namespace:
@@ -47,22 +47,31 @@ def main():
     e3sm_title: ProjectTitle = "E3SM"
     df_e3sm = df[df.project == e3sm_title]
 
+    # 1) Cumulatuve sum report
+    df_e3sm_report = gen_report(df_e3sm)
+    plot_cumulative_sum(df_e3sm_report, e3sm_title)
+
+    # 2) Report by facet
     # Check dataset template for available facets
     report_e3sm_facets = ["time_frequency"]
     for facet in report_e3sm_facets:
         df_e3sm_by_facet = gen_report(df_e3sm, facet=facet)
-        plot_report(df_e3sm_by_facet, project_title=e3sm_title, facet=facet)
+        plot_by_facet(df_e3sm_by_facet, project_title=e3sm_title, facet=facet)
 
     # E3SM in CMIP6 report
     # ====================
     e3sm_cmip6_title: ProjectTitle = "E3SM in CMIP6"
     df_e3sm_cmip6 = df[df.project == e3sm_cmip6_title]
 
-    # Check dataset template for available facets
+    # 1) Cumulative sum report
+    df_e3sm_cmip6_report = gen_report(df_e3sm_cmip6)
+    plot_cumulative_sum(df_e3sm_cmip6_report, e3sm_cmip6_title)
+
+    # 2) Check dataset template for available facets
     report_cmip6_facets = ["activity"]
     for facet in report_cmip6_facets:
         df_cmip6_by_facet = gen_report(df_e3sm_cmip6, facet=facet)
-        plot_report(df_cmip6_by_facet, project_title=e3sm_title, facet=facet)
+        plot_by_facet(df_cmip6_by_facet, project_title=e3sm_title, facet=facet)
 
     logger.info("\nCompleted, check the /outputs directory.")
 

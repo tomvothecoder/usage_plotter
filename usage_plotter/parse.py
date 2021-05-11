@@ -252,12 +252,12 @@ def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
     :return: DataFrame containing fiscal year monthly report
     :rtype: pd.DataFrame
     """
+    df_copy = df.copy()
     agg_cols = ["calendar_yr_mon", "calendar_yr", "calendar_mon"]
+
     if facet:
         agg_cols.append(facet)
-
-    df_copy = df.copy()
-    df_copy[facet] = df_copy[facet].fillna(value="N/A")
+        df_copy[facet] = df_copy[facet].fillna(value="N/A")
 
     # Total requests on a monthly basis
     df_req_by_mon = df_copy.value_counts(subset=agg_cols).reset_index(name="requests")
@@ -271,8 +271,6 @@ def gen_report(df: pd.DataFrame, facet: Optional[str] = None) -> pd.DataFrame:
     # Calendar year report
     df_cy_report = pd.merge(df_req_by_mon, df_data_by_mon, on=agg_cols)
     df_cy_report = df_cy_report.sort_values(by=agg_cols)
-    # Replace all facet None values for grouping
-    df_cy_report[facet] = df_cy_report[facet].fillna(f"No {facet}")
 
     # Final report with fiscal information
     df_cy_fy_report = calendar_to_fiscal(df_cy_report, facet)
@@ -302,14 +300,14 @@ def calendar_to_fiscal(df: pd.DataFrame, facet: Optional[str]) -> pd.DataFrame:
         lambda row: E3SM_CY_TO_FY_MAP[row.calendar_mon], axis=1
     )
     df_resample["fiscal_quarter"] = df_resample.fy_quarter.dt.strftime("%q")
+
+    # Aggregate to calculate sums
     agg_cols = [
-        "fy_quarter",
-        "fiscal_yr",
-        "fiscal_quarter",
-        "fiscal_mon",
         "calendar_yr",
         "calendar_mon",
-        "calendar_yr_mon",
+        "fy_quarter",
+        "fiscal_yr",
+        "fiscal_mon",
     ]
     if facet:
         agg_cols.append(facet)

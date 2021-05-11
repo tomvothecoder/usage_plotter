@@ -1,1 +1,1 @@
-# Directory for storing output plots and CSVs
+# Directory for storing CSV reports and plots
