@@ -23,10 +23,11 @@ def plot_cumulative_sum(df: pd.DataFrame, project_title: ProjectTitle):
     :param project_title: Title of the project
     :type project_title: ProjectTitle
     """
-    fiscal_yrs: List[str] = df.fiscal_yr.unique()
+    df_copy = df.copy()
+    fiscal_yrs: List[str] = df_copy.fiscal_yr.unique()
 
     for fiscal_yr in fiscal_yrs:
-        df_fy = df[df.fiscal_yr == fiscal_yr]
+        df_fy = df_copy[df_copy.fiscal_yr == fiscal_yr]
         df_fy["cumulative_requests"] = df_fy.requests.cumsum()
         df_fy["cumulative_gb"] = df_fy.gb.cumsum()
 
