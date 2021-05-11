@@ -45,7 +45,7 @@ def main():
     # E3SM report
     # ===========
     e3sm_title: ProjectTitle = "E3SM"
-    df_e3sm = df[df.project == e3sm_title]
+    df_e3sm = df.loc[df.project == e3sm_title]
 
     # 1) Cumulatuve sum report
     df_e3sm_report = gen_report(df_e3sm)
@@ -61,7 +61,7 @@ def main():
     # E3SM in CMIP6 report
     # ====================
     e3sm_cmip6_title: ProjectTitle = "E3SM in CMIP6"
-    df_e3sm_cmip6 = df[df.project == e3sm_cmip6_title]
+    df_e3sm_cmip6 = df.loc[df.project == e3sm_cmip6_title]
 
     # 1) Cumulative sum report
     df_e3sm_cmip6_report = gen_report(df_e3sm_cmip6)

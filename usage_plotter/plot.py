@@ -23,11 +23,10 @@ def plot_cumulative_sum(df: pd.DataFrame, project_title: ProjectTitle):
     :param project_title: Title of the project
     :type project_title: ProjectTitle
     """
-    df_copy = df.copy()
-    fiscal_yrs: List[str] = df_copy.fiscal_yr.unique()
+    fiscal_yrs: List[str] = df.fiscal_yr.unique()
 
     for fiscal_yr in fiscal_yrs:
-        df_fy = df_copy[df_copy.fiscal_yr == fiscal_yr]
+        df_fy = df.loc[df.fiscal_yr == fiscal_yr]
         df_fy["cumulative_requests"] = df_fy.requests.cumsum()
         df_fy["cumulative_gb"] = df_fy.gb.cumsum()
 
@@ -77,7 +76,7 @@ def plot_by_facet(
 
     for fiscal_yr in fiscal_yrs:
         logger.info(f"\nGenerating report and plot for {project_title} FY{fiscal_yr}")
-        df_fy = df[df.fiscal_yr == fiscal_yr]
+        df_fy = df.loc[df.fiscal_yr == fiscal_yr]
 
         pivot_table = pd.pivot_table(
             df_fy,
