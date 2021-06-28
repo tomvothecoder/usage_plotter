@@ -72,6 +72,10 @@ E3SM
 
       %(source)s.%(model_version)s.%(experiment)s.%(grid_resolution)s.%(realm)s.%(regridding)s.%(data_type)s.%(time_frequency)s.%(ensemble_member)s
 
+- Search API URL
+
+      https://esgf-node.llnl.gov/esg-search/search/?offset=0&limit=0&type=Dataset&replica=false&latest=true&project=e3sm&project=ACME&facets=experiment%2Cscience_driver%2Crealm%2Cmodel_version%2Cregridding%2Ctime_frequency%2Cdata_type%2Censemble_member%2Ctuning%2Ccampaign%2Cperiod%2Catmos_grid_resolution%2Cocean_grid_resolution%2Cland_grid_resolution%2Cseaice_grid_resolution%2Cdata_node&format=application%2Fsolr%2Bjson
+
 E3SM in CMIP6 Guidelines
 
 - Example log
@@ -85,6 +89,10 @@ E3SM in CMIP6 Guidelines
 - File/Dateset ID template
 
       %(mip_era)s.%(activity_drs)s.%(institution_id)s.%(source_id)s.%(experiment_id)s.%(member_id)s.%(table_id)s.%(variable_id)s.%(grid_label)s
+
+- Search API URL:
+
+      https://esgf-node.llnl.gov/esg-search/search/?offset=0&limit=0&type=Dataset&replica=false&latest=true&institution_id=E3SM-Project&project=CMIP6&facets=mip_era%2Cactivity_id%2Cmodel_cohort%2Cproduct%2Csource_id%2Cinstitution_id%2Csource_type%2Cnominal_resolution%2Cexperiment_id%2Csub_experiment_id%2Cvariant_label%2Cgrid_label%2Ctable_id%2Cfrequency%2Crealm%2Cvariable_id%2Ccf_standard_name%2Cdata_node&format=application%2Fsolr%2Bjson
 
 E3SM CMIP6 Variables Guideline
 

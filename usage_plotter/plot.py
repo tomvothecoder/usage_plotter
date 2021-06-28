@@ -44,7 +44,7 @@ def plot_cumulative_sum(df: pd.DataFrame, project_title: ProjectTitle):
         )
         df_fy.plot(
             ax=ax[1],
-            title=f"{project_title} FY{fiscal_yr} Cumulative Data Access",
+            title=f"{project_title} FY{fiscal_yr} Cumulative Data Accessed",
             x="fiscal_mon",
             y="cumulative_gb",
             xticks=range(1, 13),
@@ -78,19 +78,22 @@ def plot_by_facet(
         logger.info(f"\nGenerating report and plot for {project_title} FY{fiscal_yr}")
         df_fy = df.loc[df.fiscal_yr == fiscal_yr]
 
-        pivot_table = pd.pivot_table(
-            df_fy,
-            index="fiscal_mon",
-            values=["requests", "gb"],
-            columns=facet,
-            aggfunc="sum",
+        pivot_table = (
+            pd.pivot_table(
+                df_fy,
+                index="fiscal_mon",
+                values=["requests", "gb"],
+                columns=facet,
+                aggfunc="sum",
+            )
+            .fillna(0)
+            .cumsum()
         )
 
         fig, ax = plt.subplots(nrows=2, ncols=1, figsize=(12, 8))
         # https://pandas.pydata.org/pandas-docs/version/0.15.2/generated/pandas.DataFrame.plot.html
         base_config: pd.DataFrame.plot.__init__ = {
             "kind": "line",
-            "stacked": True,
             "legend": False,
             "style": ".-",
             "sharex": True,
@@ -102,13 +105,14 @@ def plot_by_facet(
         pivot_table.requests.plot(
             **base_config,
             ax=ax[0],
-            title=f"{project_title} FY{fiscal_yr} Requests by Month ({facet})",
+            title=f"{project_title} FY{fiscal_yr} Cumulative Requests by {facet}",
             ylabel="Requests",
         )
+
         pivot_table.gb.plot(
             **base_config,
             ax=ax[1],
-            title=f"{project_title} FY{fiscal_yr} Data Access by Month ({facet})",
+            title=f"{project_title} FY{fiscal_yr} Cumulative Data Accessed by {facet}",
             ylabel="Data Access (GB)",
         )
 
